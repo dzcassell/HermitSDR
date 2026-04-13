@@ -130,6 +130,7 @@ class WaterfallDisplay {
         const displayW = this.container.querySelector('.wf-display');
         if (!displayW) return;
         const w = displayW.clientWidth;
+        if (w < 1) return;  // container not visible yet
         const specH = 150;
         const axisH = 28;
         const wfH = Math.max(200, displayW.clientHeight - specH - axisH);
@@ -146,7 +147,7 @@ class WaterfallDisplay {
         this.wfBuffer = document.createElement('canvas');
         this.wfBuffer.width = w;
         this.wfBuffer.height = wfH;
-        this.wfBufferCtx = this.wfBuffer.getContext('2d');
+        this.wfBufferCtx = this.wfBuffer.getContext('2d', { willReadFrequently: true });
         this.wfLine = 0;
 
         this._drawAxis();
@@ -361,6 +362,7 @@ class WaterfallDisplay {
         const numBins = power.length;
         const w = this.wfBuffer.width;
         const h = this.wfBuffer.height;
+        if (w < 1 || h < 2) return;  // canvas not laid out yet
         const dbRange = this.dbMax - this.dbMin;
 
         // Scroll existing waterfall down by 1 pixel

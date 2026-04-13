@@ -18,8 +18,9 @@ from .discovery import HL2Discovery
 from .radio import RadioConnection, RadioState
 from .protocol import SampleRate, hex_dump, DiscoveryReply
 from .dsp import DSPPipeline, DSPConfig, ColorPalette, generate_color_palette
+from .network_config import set_hl2_ip, HL2NetworkConfig, check_needs_setup
 
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 # ──────────────────────────────────────────────
 # App setup
@@ -287,6 +288,51 @@ def api_palette():
         palette = ColorPalette.CLASSIC
     colors = generate_color_palette(palette)
     return jsonify({'palette': name, 'colors': colors})
+
+
+@app.route('/api/network/config', methods=['GET'])
+def api_network_config():
+    """Get network config for all discovered devices."""
+    devices = discovery.devices
+    configs = []
+    for mac, dev in devices.items():
+        config = {
+            'mac': mac,
+            'source_ip': dev.source_ip,
+            'board_name': dev.board_name,
+            'is_apipa': dev.source_ip.startswith('169.254.'),
+            'fixed_ip': dev.fixed_ip,
+            'config_bits': dev.config_bits,
+            'valid_ip': bool(dev.config_bits & 0x80),
+            'favor_dhcp': bool(dev.config_bits & 0x20),
+            'needs_setup': dev.source_ip.startswith('169.254.') or not (dev.config_bits & 0x80),
+        }
+        configs.append(config)
+    return jsonify({'devices': configs})
+
+
+@app.route('/api/network/set_ip', methods=['POST'])
+def api_network_set_ip():
+    """Program a fixed IP into an HL2's EEPROM.
+
+    Expects JSON: {
+        "current_ip": "169.254.19.221",  (or whatever the HL2's current IP is)
+        "new_ip": "192.168.40.20",
+        "favor_dhcp": false              (optional, default false)
+    }
+
+    Note: HL2 must be power-cycled after programming.
+    """
+    if not request.is_json:
+        return jsonify({'error': 'JSON body required'}), 400
+    current_ip = request.json.get('current_ip', '')
+    new_ip = request.json.get('new_ip', '')
+    favor_dhcp = request.json.get('favor_dhcp', False)
+    if not current_ip or not new_ip:
+        return jsonify({'error': 'current_ip and new_ip required'}), 400
+    result = set_hl2_ip(current_ip, new_ip, favor_dhcp)
+    status = 200 if result.get('success') else 500
+    return jsonify(result), status
 
 
 @app.route('/api/packet_log')

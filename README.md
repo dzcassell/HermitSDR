@@ -60,7 +60,43 @@ docker compose up -d
 
 - Docker with `nvidia-container-toolkit` installed
 - NVIDIA GPU (tested: RTX 5070 Ti 16GB)
-- Hermes Lite 2 on the same LAN subnet
+- Hermes Lite 2 on the same LAN segment
+
+### Network Bootstrapping
+
+The HL2 uses DHCP by default. If no DHCP server is present (or the lease fails), it falls back to a link-local address (`169.254.19.221`). This causes routing issues since your host is likely on a different subnet (e.g., `192.168.x.x`).
+
+**Option 1: Web UI (recommended)**
+
+1. Start HermitSDR — discovery uses UDP broadcast and will find the HL2 regardless of its IP
+2. If the HL2 shows an orange IP (169.254.x.x), click the **Setup** button next to it
+3. Enter your desired fixed IP (e.g., `192.168.40.20`) and click **Program EEPROM**
+4. Power cycle the HL2 — it will come up at the new address
+
+> **Note:** If the HL2 is on a link-local address, you may need to add a route on the Docker host first:
+> ```bash
+> ip route add 169.254.0.0/16 dev <your-interface>
+> ```
+
+**Option 2: CLI tool**
+
+```bash
+# Add route to reach the HL2
+ip route add 169.254.0.0/16 dev enp10s0
+
+# Discover devices
+python3 tools/hl2_set_ip.py --discover
+
+# Program fixed IP
+python3 tools/hl2_set_ip.py 169.254.19.221 192.168.40.20
+
+# Power cycle the HL2, then verify
+python3 tools/hl2_set_ip.py --discover
+```
+
+**Option 3: DHCP reservation**
+
+Assign a static lease in your router/DHCP server for the HL2's MAC address (starts with `00:1c:c0`).
 
 ## HPSDR Protocol 1 Reference
 

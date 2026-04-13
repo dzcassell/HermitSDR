@@ -282,3 +282,43 @@ tr:hover td { background: rgba(0, 204, 136, 0.03); }
     color: var(--text-dim);
     text-transform: uppercase;
 }
+
+/* ═══ Network Configuration ═══ */
+.network-alert {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    padding: 0.75rem 1rem;
+    margin-top: 0.75rem;
+    background: #2a1f00;
+    border: 1px solid #664400;
+    border-radius: 4px;
+}
+.alert-icon { font-size: 1.4rem; color: var(--orange); flex-shrink: 0; }
+.alert-body { font-size: 0.85rem; color: var(--text); }
+.alert-body strong { color: var(--orange); }
+.alert-body p { margin-top: 0.3rem; color: var(--text-dim); }
+
+.network-config {
+    margin-top: 0.75rem;
+    padding: 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+.network-config h3 { font-size: 0.9rem; color: var(--text-bright); margin-bottom: 0.75rem; }
+.config-grid { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; }
+.config-field { display: flex; flex-direction: column; gap: 0.25rem; }
+.config-field label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.config-field .input-text { min-width: 160px; }
+
+.net-status {
+    margin-top: 0.75rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+.net-info { background: #1a2233; color: var(--blue); border: 1px solid #334466; }
+.net-success { background: #1a3322; color: var(--green); border: 1px solid #226633; }
+.net-error { background: #331515; color: var(--red); border: 1px solid #663333; }

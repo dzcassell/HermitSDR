@@ -50,6 +50,40 @@
                         </tr>
                     </tbody>
                 </table>
+
+                <!-- Network Setup Alert (shown for APIPA devices) -->
+                <div id="network-alert" class="network-alert hidden">
+                    <div class="alert-icon">&#9888;</div>
+                    <div class="alert-body">
+                        <strong>Network Setup Required</strong>
+                        <p id="network-alert-msg">This HL2 is using a link-local address (169.254.x.x) — it didn't get a DHCP lease and has no fixed IP. Configure a fixed IP on your LAN subnet to enable reliable communication.</p>
+                    </div>
+                </div>
+
+                <!-- Network Config Form (toggled by Setup button) -->
+                <div id="network-config" class="network-config hidden">
+                    <h3>Configure HL2 Network</h3>
+                    <div class="config-grid">
+                        <div class="config-field">
+                            <label>Current IP</label>
+                            <input type="text" id="net-current-ip" class="input-text" readonly>
+                        </div>
+                        <div class="config-field">
+                            <label>New Fixed IP</label>
+                            <input type="text" id="net-new-ip" placeholder="192.168.40.20" class="input-text">
+                        </div>
+                        <div class="config-field">
+                            <label>
+                                <input type="checkbox" id="net-favor-dhcp"> Favor DHCP over fixed IP
+                            </label>
+                        </div>
+                        <div class="config-field">
+                            <button id="btn-set-ip" class="btn btn-primary">Program EEPROM</button>
+                            <button id="btn-cancel-config" class="btn btn-secondary">Cancel</button>
+                        </div>
+                    </div>
+                    <div id="net-status" class="net-status hidden"></div>
+                </div>
             </div>
         </section>
 

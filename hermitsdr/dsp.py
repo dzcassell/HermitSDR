@@ -17,21 +17,30 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, Callable
 
-# Try CuPy (GPU), fall back to numpy (CPU)
-try:
-    import cupy as cp
-    import cupy.fft as fft_lib
-    HAS_GPU = True
-    xp = cp
-except ImportError:
-    import numpy as np
-    import numpy.fft as fft_lib
-    HAS_GPU = False
-    xp = None
-
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# Try CuPy (GPU), fall back to numpy (CPU)
+# Import alone isn't enough — the 5070 Ti (Blackwell/sm_120) needs
+# a runtime kernel test since precompiled binaries may not exist.
+HAS_GPU = False
+try:
+    import cupy as cp
+    import cupy.fft as fft_lib
+    # Runtime test: actually execute a small kernel
+    _test = cp.array([1.0, 2.0, 3.0])
+    _test_result = cp.fft.fft(_test)
+    assert _test_result is not None
+    del _test, _test_result
+    HAS_GPU = True
+    xp = cp
+    logger.info("CuPy GPU runtime test passed")
+except Exception as e:
+    import numpy.fft as fft_lib
+    HAS_GPU = False
+    xp = None
+    logger.warning(f"GPU unavailable ({type(e).__name__}: {e}), using numpy fallback")
 
 
 class WindowFunction(Enum):

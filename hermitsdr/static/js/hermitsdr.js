@@ -50,16 +50,34 @@ socket.on('devices_updated', (data) => renderDevices(data.devices));
 
 function renderDevices(devices) {
     const dl = document.getElementById('device-list');
+    const alert = document.getElementById('network-alert');
     if (!devices || !devices.length) {
         dl.innerHTML = '<tr class="placeholder-row"><td colspan="7">No devices discovered. Click <strong>Scan LAN</strong> to search.</td></tr>';
+        alert.classList.add('hidden');
         return;
     }
-    dl.innerHTML = devices.map(d => `<tr>
-        <td>${d.board_name}</td><td>${d.mac_address}</td><td>${d.source_ip||'\u2014'}</td>
+    // Check for APIPA devices
+    const apipa = devices.find(d => d.is_apipa || d.needs_setup);
+    if (apipa) {
+        alert.classList.remove('hidden');
+        document.getElementById('network-alert-msg').textContent = apipa.is_apipa
+            ? `HL2 at ${apipa.source_ip} is using a link-local address — no DHCP lease and no fixed IP. Use Setup to assign a fixed IP on your LAN subnet.`
+            : `HL2 at ${apipa.source_ip} may need network configuration.`;
+    } else {
+        alert.classList.add('hidden');
+    }
+    dl.innerHTML = devices.map(d => {
+        const ipClass = d.is_apipa ? 'style="color:var(--orange)"' : '';
+        const setupBtn = d.needs_setup
+            ? `<button class="btn btn-tiny" style="color:var(--orange);border-color:var(--orange)" onclick="showNetConfig('${d.source_ip}')">Setup</button> `
+            : '';
+        return `<tr>
+        <td>${d.board_name}</td><td>${d.mac_address}</td><td ${ipClass}>${d.source_ip||'\u2014'}</td>
         <td>${d.gateware_version}</td><td>${d.num_receivers}</td>
         <td>${d.is_streaming?'<span style="color:var(--blue)">STREAMING</span>':'<span style="color:var(--green)">IDLE</span>'}</td>
-        <td><button class="btn btn-primary btn-tiny" onclick="connectRadio('${d.mac_address}')">Connect</button></td>
-    </tr>`).join('');
+        <td>${setupBtn}<button class="btn btn-primary btn-tiny" onclick="connectRadio('${d.mac_address}')">Connect</button></td>
+    </tr>`;
+    }).join('');
 }
 
 // Connect / Disconnect
@@ -216,6 +234,64 @@ function drawTrace(samples, color, maxVal, w, h) {
 
 // Log clear
 document.getElementById('btn-clear-log').addEventListener('click', () => { log.innerHTML = ''; });
+
+// Network Config
+function showNetConfig(currentIp) {
+    document.getElementById('net-current-ip').value = currentIp;
+    document.getElementById('net-new-ip').value = '';
+    document.getElementById('net-status').classList.add('hidden');
+    document.getElementById('network-config').classList.remove('hidden');
+    logMsg(`Opening network config for ${currentIp}`);
+}
+window.showNetConfig = showNetConfig;
+
+document.getElementById('btn-cancel-config').addEventListener('click', () => {
+    document.getElementById('network-config').classList.add('hidden');
+});
+
+document.getElementById('btn-set-ip').addEventListener('click', async () => {
+    const currentIp = document.getElementById('net-current-ip').value;
+    const newIp = document.getElementById('net-new-ip').value.trim();
+    const favorDhcp = document.getElementById('net-favor-dhcp').checked;
+    const statusEl = document.getElementById('net-status');
+
+    if (!newIp || !/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(newIp)) {
+        statusEl.textContent = 'Enter a valid IP address.';
+        statusEl.className = 'net-status net-error';
+        statusEl.classList.remove('hidden');
+        return;
+    }
+
+    statusEl.textContent = 'Programming EEPROM...';
+    statusEl.className = 'net-status net-info';
+    statusEl.classList.remove('hidden');
+    document.getElementById('btn-set-ip').disabled = true;
+    logMsg(`Programming HL2 EEPROM: ${currentIp} → ${newIp}`);
+
+    try {
+        const res = await fetch('/api/network/set_ip', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ current_ip: currentIp, new_ip: newIp, favor_dhcp: favorDhcp })
+        });
+        const data = await res.json();
+        if (data.success) {
+            statusEl.innerHTML = `<strong>Success!</strong> IP ${newIp} written to EEPROM.<br>` +
+                `<strong>Power cycle the HL2 now</strong> to apply the new address.<br>` +
+                `After reboot, click Scan LAN to find it at ${newIp}.`;
+            statusEl.className = 'net-status net-success';
+            logMsg(`EEPROM programmed: ${newIp} — power cycle required`, 'success');
+        } else {
+            statusEl.textContent = `Error: ${data.error}`;
+            statusEl.className = 'net-status net-error';
+            logMsg(`EEPROM programming failed: ${data.error}`, 'error');
+        }
+    } catch (e) {
+        statusEl.textContent = `Request failed: ${e.message}`;
+        statusEl.className = 'net-status net-error';
+        logMsg(`Network config error: ${e.message}`, 'error');
+    }
+    document.getElementById('btn-set-ip').disabled = false;
+});
 
 logMsg('HermitSDR client loaded');
 logMsg('Ready for Hermes Lite 2 discovery');

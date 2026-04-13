@@ -126,6 +126,7 @@ class DiscoveryReply:
         return names.get(self.board_id, f"Unknown (0x{self.board_id:02x})")
 
     def to_dict(self) -> dict:
+        is_apipa = self.source_ip.startswith('169.254.')
         return {
             'mac_address': self.mac_address,
             'board_name': self.board_name,
@@ -138,6 +139,9 @@ class DiscoveryReply:
             'fixed_ip': self.fixed_ip,
             'source_ip': self.source_ip,
             'source_port': self.source_port,
+            'config_bits': self.config_bits,
+            'is_apipa': is_apipa,
+            'needs_setup': is_apipa or not (self.config_bits & 0x80),
         }
 
 

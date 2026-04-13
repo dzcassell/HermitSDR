@@ -221,18 +221,19 @@ class Demodulator:
         self._aa_state = lfilter_zi(self._aa_coeffs, 1.0) * 0.0
 
         # ── Mode filter (at AUDIO_RATE, post-decimation) ──
-        cutoff = bandwidth / AUDIO_RATE  # normalized (0..0.5)
-        cutoff = min(cutoff, 0.495)       # don't exceed Nyquist
+        # Cutoff in Hz — firwin with fs= interprets directly
+        mode_cutoff = min(bandwidth, AUDIO_RATE / 2 - 100)  # guard Nyquist
 
         num_taps = self.config.filter_taps
         if num_taps % 2 == 0:
             num_taps += 1  # odd for type I FIR
 
-        self._filter_coeffs = firwin(num_taps, cutoff, window='blackman')
+        self._filter_coeffs = firwin(num_taps, mode_cutoff, fs=AUDIO_RATE,
+                                     window='blackman')
         self._filter_state = lfilter_zi(self._filter_coeffs, 1.0) * 0.0
 
         logger.info(f"Filter rebuilt: mode={self.config.mode.value} "
-                     f"bw={bandwidth}Hz cutoff={cutoff:.4f} taps={num_taps} "
+                     f"bw={bandwidth}Hz cutoff={mode_cutoff}Hz taps={num_taps} "
                      f"aa_taps={aa_taps}")
 
     def _process_loop(self):

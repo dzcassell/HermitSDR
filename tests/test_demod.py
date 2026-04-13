@@ -138,6 +138,26 @@ class TestDemodulator:
         # CW filter should be different from USB
         assert len(d._filter_coeffs) == d.config.filter_taps + (1 if d.config.filter_taps % 2 == 0 else 0)
 
+    def test_filter_bandwidth_usb(self):
+        """USB filter must pass 1200 Hz, not 600 Hz (firwin fs= regression)."""
+        d = Demodulator(DemodConfig(mode=DemodMode.USB))
+        # Check filter response at 1000 Hz (should pass) and 2000 Hz (should reject)
+        from scipy.signal import freqz
+        w, h = freqz(d._filter_coeffs, worN=8192, fs=AUDIO_RATE)
+        mag = np.abs(h)
+        # Find magnitude at ~1000 Hz (should be near 1.0, within passband)
+        idx_1k = np.argmin(np.abs(w - 1000))
+        assert mag[idx_1k] > 0.5, f"USB filter rejects 1000 Hz (mag={mag[idx_1k]:.3f})"
+
+    def test_filter_bandwidth_am(self):
+        """AM filter must pass 5000 Hz, not 2500 Hz."""
+        d = Demodulator(DemodConfig(mode=DemodMode.AM))
+        from scipy.signal import freqz
+        w, h = freqz(d._filter_coeffs, worN=8192, fs=AUDIO_RATE)
+        mag = np.abs(h)
+        idx_4k = np.argmin(np.abs(w - 4000))
+        assert mag[idx_4k] > 0.5, f"AM filter rejects 4000 Hz (mag={mag[idx_4k]:.3f})"
+
     def test_demodulate_usb(self):
         """USB demod should produce real audio from a test tone."""
         d = Demodulator(DemodConfig(mode=DemodMode.USB, squelch_db=-200.0))

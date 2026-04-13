@@ -20,7 +20,7 @@ from .protocol import SampleRate, hex_dump, DiscoveryReply
 from .dsp import DSPPipeline, DSPConfig, ColorPalette, generate_color_palette
 from .network_config import set_hl2_ip, HL2NetworkConfig, check_needs_setup
 
-__version__ = '0.3.0'
+__version__ = '0.3.1'
 
 # ──────────────────────────────────────────────
 # App setup

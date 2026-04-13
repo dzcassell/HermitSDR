@@ -5,8 +5,8 @@ HermitSDR - Audio Demodulator
 Demodulates IQ samples into audio for browser playback.
 
 Pipeline:
-    IQ (192kHz complex) → Decimate (÷4 → 48kHz) → Freq Shift →
-    Bandpass FIR → Mode Demod → AGC → float32 PCM chunks
+    IQ (192kHz complex) → Anti-alias FIR (stateful) → Decimate (÷4 → 48kHz) →
+    Freq Shift → Bandpass FIR (stateful) → Mode Demod → AGC → float32 PCM
 
 Modes:
     USB  - Upper sideband: shift -1500Hz, LPF ±1200Hz, real part
@@ -25,7 +25,7 @@ from enum import Enum
 from typing import Optional, Callable
 
 import numpy as np
-from scipy.signal import firwin, lfilter, decimate as sp_decimate
+from scipy.signal import firwin, lfilter, lfilter_zi
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +101,10 @@ class Demodulator:
         # Filter state
         self._filter_coeffs = None
         self._filter_state = None
+
+        # Anti-alias decimation filter (stateful, runs at IQ_RATE)
+        self._aa_coeffs = None
+        self._aa_state = None
         self._rebuild_filter()
 
         # AGC state
@@ -201,12 +205,22 @@ class Demodulator:
     # ── Internal ──
 
     def _rebuild_filter(self):
-        """Design the FIR low-pass filter for the current mode.
+        """Design FIR filters for the current mode.
 
-        The filter runs at AUDIO_RATE (post-decimation) to keep
-        the tap count manageable. Cutoff = mode bandwidth / 2.
+        Two filters are maintained with persistent state:
+        1. Anti-alias LPF at IQ_RATE for decimation (prevents aliasing)
+        2. Mode bandpass at AUDIO_RATE for signal selection
         """
         _, bandwidth = MODE_PARAMS[self.config.mode]
+
+        # ── Anti-alias decimation filter (at IQ_RATE) ──
+        # Cutoff at decimated Nyquist with transition guard band
+        aa_cutoff = AUDIO_RATE * 0.45  # 21.6 kHz — below 24 kHz Nyquist
+        aa_taps = 65  # moderate length for anti-alias
+        self._aa_coeffs = firwin(aa_taps, aa_cutoff, fs=IQ_RATE, window='blackman')
+        self._aa_state = lfilter_zi(self._aa_coeffs, 1.0) * 0.0
+
+        # ── Mode filter (at AUDIO_RATE, post-decimation) ──
         cutoff = bandwidth / AUDIO_RATE  # normalized (0..0.5)
         cutoff = min(cutoff, 0.495)       # don't exceed Nyquist
 
@@ -215,11 +229,11 @@ class Demodulator:
             num_taps += 1  # odd for type I FIR
 
         self._filter_coeffs = firwin(num_taps, cutoff, window='blackman')
-        # Pre-allocate filter state for lfilter (zi)
-        self._filter_state = np.zeros(num_taps - 1, dtype=np.complex128)
+        self._filter_state = lfilter_zi(self._filter_coeffs, 1.0) * 0.0
 
         logger.info(f"Filter rebuilt: mode={self.config.mode.value} "
-                     f"bw={bandwidth}Hz cutoff={cutoff:.4f} taps={num_taps}")
+                     f"bw={bandwidth}Hz cutoff={cutoff:.4f} taps={num_taps} "
+                     f"aa_taps={aa_taps}")
 
     def _process_loop(self):
         """Main demodulator loop.
@@ -269,9 +283,12 @@ class Demodulator:
         mode = self.config.mode
         shift_hz, bandwidth = MODE_PARAMS[mode]
 
-        # ── Step 1: Decimate 192k → 48k ──
-        # scipy.signal.decimate applies an anti-alias filter automatically
-        decimated = sp_decimate(iq, DECIMATION, ftype='fir', zero_phase=False)
+        # ── Step 1: Anti-alias filter + decimate 192k → 48k ──
+        # Stateful FIR filter prevents block-boundary transients
+        aa_filtered, self._aa_state = lfilter(
+            self._aa_coeffs, 1.0, iq, zi=self._aa_state
+        )
+        decimated = aa_filtered[::DECIMATION]
 
         # ── Step 2: Frequency shift to center desired passband at 0 ──
         if shift_hz != 0:

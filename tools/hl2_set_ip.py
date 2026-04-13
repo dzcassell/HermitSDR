@@ -182,7 +182,7 @@ def program_ip(hl2_ip, new_ip_str):
     time.sleep(0.1)
 
     # Drain any incoming packets briefly
-    sock.settimeout(0.1)
+    sock.settimeout(0.01)
     for _ in range(50):
         try:
             sock.recvfrom(2048)
@@ -194,6 +194,7 @@ def program_ip(hl2_ip, new_ip_str):
     # causes the second to be dropped while the bus is busy.
     print("[2/4] Writing EEPROM values...")
     seq = 0
+    sock.settimeout(0.005)  # 5ms timeout for brief drains
     for name, addr, val in writes:
         word = eeprom_write_word(addr, val)
         print(f"       {name}: EEPROM[0x{addr:02x}] = 0x{val:02x} ({val}) "
@@ -204,15 +205,15 @@ def program_ip(hl2_ip, new_ip_str):
         sock.sendto(pkt, (hl2_ip, PORT))
         seq += 1
 
-        # Wait for EEPROM write to complete before next command
+        # Wait for EEPROM write to complete
         time.sleep(0.050)
 
-        # Drain incoming IQ packets to prevent buffer buildup
-        try:
-            while True:
+        # Brief drain — just a handful of packets to prevent buffer bloat
+        for _ in range(20):
+            try:
                 sock.recvfrom(2048)
-        except socket.timeout:
-            pass
+            except socket.timeout:
+                break
 
     # Send a few more keepalive packets to let writes complete
     print("[3/4] Waiting for EEPROM writes to complete...")

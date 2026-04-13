@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="hermitsdr_logo.png" alt="HermitSDR Logo" width="300">
+</p>
 # HermitSDR
 
 A GPU-accelerated web client for Hermes SDR compatible radios.

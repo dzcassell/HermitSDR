@@ -103,6 +103,8 @@ async function connectRadio(mac) {
                 vfo = new VFO('vfo-container', socket);
                 vfo.onFrequencyChange((hz) => {
                     if (waterfall) waterfall.updateCenterFreq(hz);
+                    const mhz = (hz / 1e6).toFixed(6);
+                    logMsg(`Tuned to ${mhz} MHz (${hz} Hz)`);
                 });
                 vfo.onModeChange((mode) => {
                     logMsg(`Mode → ${mode.toUpperCase()}`);

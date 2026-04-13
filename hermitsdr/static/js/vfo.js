@@ -68,9 +68,7 @@ class VFO {
 
     /** Set frequency externally (e.g., from waterfall click) */
     setFrequency(hz) {
-        this.frequency = this._clamp(hz);
-        this._saveBandMemory();
-        this._updateDisplay();
+        this._setFrequency(hz);
     }
 
     /** Get current band object (or null if out-of-band) */
@@ -286,6 +284,7 @@ class VFO {
     }
 
     _emitFrequency() {
+        console.log('[VFO] emit set_frequency', this.frequency);
         this.socket.emit('set_frequency', { frequency: this.frequency });
         if (this._onFreqChange) this._onFreqChange(this.frequency);
     }

@@ -258,7 +258,7 @@ def api_frequency():
     global active_radio
     if not active_radio or not active_radio.state.connected:
         return jsonify({'error': 'Not connected'}), 400
-    freq = request.json.get('frequency', 0) if request.is_json else 0
+    freq = int(request.json.get('frequency', 0)) if request.is_json else 0
     if not (100000 <= freq <= 54000000):
         return jsonify({'error': 'Frequency out of range (100kHz - 54MHz)'}), 400
     active_radio.set_frequency(freq)
@@ -435,8 +435,9 @@ def ws_discover():
 
 @socketio.on('set_frequency')
 def ws_set_frequency(data):
-    freq = data.get('frequency', 0)
+    freq = int(data.get('frequency', 0))
     if active_radio and active_radio.state.connected:
+        logger.info(f"Tuning to {freq} Hz ({freq/1e6:.6f} MHz)")
         active_radio.set_frequency(freq)
         if dsp_pipeline:
             dsp_pipeline.reconfigure(center_freq=freq)

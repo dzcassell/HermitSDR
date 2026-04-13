@@ -233,6 +233,7 @@ class RadioConnection:
 
     def set_frequency(self, freq_hz: int):
         """Queue a frequency change."""
+        freq_hz = int(freq_hz)
         self.state.frequency_hz = freq_hz
         self._cc_queue.append(cc_set_frequency(1, freq_hz))
 

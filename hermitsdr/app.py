@@ -129,23 +129,38 @@ def api_connect():
         center_freq=active_radio.state.frequency_hz,
     ))
 
-    # Wire up telemetry to WebSocket
-    active_radio.on_telemetry(lambda t: socketio.emit('telemetry', t.to_dict()))
+    # ── Throttled WebSocket emitters ──
+    # At 192kHz, callbacks fire ~3000/sec. SocketIO can't keep up.
+    # Throttle: telemetry 2fps, IQ inspector 10fps, DSP frames 30fps.
 
-    # Wire IQ data to both inspector and DSP pipeline
+    _last_telem_emit = [0.0]   # mutable ref for closure
+    _last_iq_emit = [0.0]
+
+    def on_telemetry(t):
+        now = time.monotonic()
+        if now - _last_telem_emit[0] >= 0.5:  # 2 fps
+            _last_telem_emit[0] = now
+            socketio.emit('telemetry', t.to_dict())
+
+    active_radio.on_telemetry(on_telemetry)
+
     def on_iq(i_samples, q_samples):
-        # Feed DSP pipeline
+        # Always feed DSP pipeline (fast deque append)
         if dsp_pipeline:
             dsp_pipeline.push_iq(i_samples, q_samples)
-        # Send small sample for IQ inspector
-        socketio.emit('iq_sample', {
-            'i': i_samples[:8],
-            'q': q_samples[:8],
-            'count': len(i_samples),
-        })
+        # Throttle WebSocket IQ inspector to 10 fps
+        now = time.monotonic()
+        if now - _last_iq_emit[0] >= 0.1:
+            _last_iq_emit[0] = now
+            socketio.emit('iq_sample', {
+                'i': i_samples[:8],
+                'q': q_samples[:8],
+                'count': len(i_samples),
+            })
+
     active_radio.on_iq_data(on_iq)
 
-    # Wire spectral frames to WebSocket (binary)
+    # DSP spectral frames are already throttled by the pipeline's FPS target
     def on_spectral_frame(frame):
         socketio.emit('spectral_frame', frame.to_binary())
     dsp_pipeline.on_frame(on_spectral_frame)

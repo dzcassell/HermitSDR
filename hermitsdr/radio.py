@@ -109,6 +109,9 @@ class RadioConnection:
         self._pps_last_time = 0.0
         self._pps_rate = 0.0
 
+        # Callback throttle
+        self._telem_last_emit = 0.0
+
     def on_iq_data(self, callback: Callable):
         """Register callback for IQ data: callback(i_samples, q_samples)."""
         self._iq_callbacks.append(callback)
@@ -238,18 +241,36 @@ class RadioConnection:
     def _rx_loop(self):
         """Receive and parse IQ packets from the radio."""
         logger.info("RX loop started")
+        diag_time = time.monotonic()
+        diag_packets = 0
         while self._running:
             try:
                 ready, _, _ = select.select([self._sock], [], [], 0.5)
                 if not ready:
+                    if self._running:
+                        logger.warning("RX: no data received in 500ms")
                     continue
                 data, addr = self._sock.recvfrom(2048)
                 self._process_rx_packet(data)
+                diag_packets += 1
+
+                # Periodic diagnostic log
+                now = time.monotonic()
+                if now - diag_time >= 5.0:
+                    logger.info(
+                        f"RX: {diag_packets} pkts in 5s "
+                        f"({diag_packets/5:.0f}/s), "
+                        f"total={self.telemetry.rx_packets}, "
+                        f"seq_err={self.telemetry.rx_sequence_errors}, "
+                        f"buf={len(self._iq_buffer)}"
+                    )
+                    diag_packets = 0
+                    diag_time = now
             except socket.timeout:
                 continue
             except Exception as e:
                 if self._running:
-                    logger.error(f"RX error: {e}")
+                    logger.error(f"RX error: {e}", exc_info=True)
         logger.info("RX loop stopped")
 
     def _process_rx_packet(self, data: bytes):
@@ -322,12 +343,15 @@ class RadioConnection:
                 self.telemetry.reverse_power_raw = (cc.data >> 16) & 0xFFFF
                 self.telemetry.current_raw = cc.data & 0xFFFF
 
-        # Notify telemetry callbacks
-        for cb in self._telemetry_callbacks:
-            try:
-                cb(self.telemetry)
-            except Exception as e:
-                logger.error(f"Telemetry callback error: {e}")
+        # Throttle telemetry callbacks to ~4/sec (avoid overwhelming consumers)
+        now = time.monotonic()
+        if now - self._telem_last_emit >= 0.25:
+            self._telem_last_emit = now
+            for cb in self._telemetry_callbacks:
+                try:
+                    cb(self.telemetry)
+                except Exception as e:
+                    logger.error(f"Telemetry callback error: {e}")
 
     def _tx_loop(self):
         """Send IQ packets to the radio at the required cadence.
@@ -336,8 +360,9 @@ class RadioConnection:
         the streaming connection. We send silence (zeros) with C&C
         commands interleaved.
         """
-        logger.info("TX loop started")
+        logger.info(f"TX loop started → {self.device.source_ip}:{METIS_PORT}")
         interval = 0.002625  # ~2.625ms per packet
+        tx_count = 0
 
         # Default C&C: cycle through config registers
         default_cc_cycle = [
@@ -350,7 +375,6 @@ class RadioConnection:
 
         while self._running:
             try:
-                # Get two C&C commands for this packet
                 cc1 = None
                 cc2 = None
 
@@ -359,7 +383,6 @@ class RadioConnection:
                 if self._cc_queue:
                     cc2 = self._cc_queue.popleft()
 
-                # Fall back to cycling default commands
                 if cc1 is None:
                     cc1 = default_cc_cycle[cc_idx % len(default_cc_cycle)]
                     cc_idx += 1
@@ -369,11 +392,17 @@ class RadioConnection:
 
                 pkt = build_iq_packet(cc1, cc2)
                 self._sock.sendto(pkt, (self.device.source_ip, METIS_PORT))
+                tx_count += 1
+
+                if tx_count == 1:
+                    logger.info(f"TX: first keepalive sent ({len(pkt)} bytes)")
+                elif tx_count == 100:
+                    logger.info(f"TX: 100 keepalive packets sent OK")
 
                 time.sleep(interval)
             except Exception as e:
                 if self._running:
-                    logger.error(f"TX error: {e}")
+                    logger.error(f"TX error: {e}", exc_info=True)
                     time.sleep(0.1)
 
-        logger.info("TX loop stopped")
+        logger.info(f"TX loop stopped (sent {tx_count} packets)")

@@ -164,9 +164,9 @@ def api_connect():
         now = time.monotonic()
         if now - _last_iq_emit[0] >= 0.1:
             _last_iq_emit[0] = now
-            # .tolist() handles both numpy arrays and plain lists
-            i_preview = list(i_samples[:8]) if hasattr(i_samples, 'tolist') else i_samples[:8]
-            q_preview = list(q_samples[:8]) if hasattr(q_samples, 'tolist') else q_samples[:8]
+            # .tolist() converts numpy scalars to native Python types
+            i_preview = i_samples[:8].tolist() if hasattr(i_samples, 'tolist') else list(i_samples[:8])
+            q_preview = q_samples[:8].tolist() if hasattr(q_samples, 'tolist') else list(q_samples[:8])
             socketio.emit('iq_sample', {
                 'i': i_preview,
                 'q': q_preview,
@@ -190,8 +190,8 @@ def api_connect():
         if now - _last_level_emit[0] >= 0.1:
             _last_level_emit[0] = now
             socketio.emit('audio_level', {
-                'level_db': round(level_db, 1),
-                'squelched': level_db < demodulator.config.squelch_db,
+                'level_db': float(round(level_db, 1)),
+                'squelched': bool(level_db < demodulator.config.squelch_db),
             })
 
     demodulator.on_audio(on_audio)

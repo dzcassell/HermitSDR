@@ -189,29 +189,30 @@ def program_ip(hl2_ip, new_ip_str):
         except socket.timeout:
             break
 
-    # Send EEPROM write commands
+    # Send EEPROM write commands — ONE write per packet
+    # The I2C bus needs ~5ms per write; sending two in one packet
+    # causes the second to be dropped while the bus is busy.
     print("[2/4] Writing EEPROM values...")
     seq = 0
-    for i in range(0, len(writes), 2):
-        name1, addr1, val1 = writes[i]
-        word1 = eeprom_write_word(addr1, val1)
-        print(f"       {name1}: EEPROM[0x{addr1:02x}] = 0x{val1:02x} ({val1}) "
-              f"→ I2C2 word: 0x{word1:08x}")
+    for name, addr, val in writes:
+        word = eeprom_write_word(addr, val)
+        print(f"       {name}: EEPROM[0x{addr:02x}] = 0x{val:02x} ({val}) "
+              f"→ I2C2 word: 0x{word:08x}")
 
-        if i + 1 < len(writes):
-            name2, addr2, val2 = writes[i + 1]
-            word2 = eeprom_write_word(addr2, val2)
-            print(f"       {name2}: EEPROM[0x{addr2:02x}] = 0x{val2:02x} ({val2}) "
-                  f"→ I2C2 word: 0x{word2:08x}")
-        else:
-            word2 = 0
-            name2 = None
-
-        # Send the IQ packet with these two I2C2 writes
-        pkt = build_iq_packet(seq, I2C2_ADDR, word1, I2C2_ADDR, word2)
+        # Send write in frame 1, idle in frame 2
+        pkt = build_iq_packet(seq, I2C2_ADDR, word, 0x00, 0)
         sock.sendto(pkt, (hl2_ip, PORT))
         seq += 1
-        time.sleep(0.020)  # Give EEPROM time to write (~5ms each)
+
+        # Wait for EEPROM write to complete before next command
+        time.sleep(0.050)
+
+        # Drain incoming IQ packets to prevent buffer buildup
+        try:
+            while True:
+                sock.recvfrom(2048)
+        except socket.timeout:
+            pass
 
     # Send a few more keepalive packets to let writes complete
     print("[3/4] Waiting for EEPROM writes to complete...")

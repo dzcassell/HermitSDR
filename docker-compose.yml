@@ -1,0 +1,42 @@
+# HermitSDR - Docker Compose
+# Requires: nvidia-container-toolkit installed on the host
+# Usage: docker compose up -d
+# UI: http://<host-ip>:5000
+
+services:
+  hermitsdr:
+    build: .
+    container_name: hermitsdr
+    restart: unless-stopped
+
+    # Host networking required for UDP broadcast discovery on port 1024.
+    # The HL2 discovery protocol sends/receives UDP broadcasts that
+    # don't traverse Docker's default bridge network.
+    network_mode: host
+
+    # NVIDIA GPU access for CuPy FFT acceleration
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    environment:
+      - HERMITSDR_PORT=5000
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+    # Persist any future config/state
+    volumes:
+      - hermitsdr-data:/opt/hermitsdr/data
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  hermitsdr-data:

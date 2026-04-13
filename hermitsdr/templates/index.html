@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HermitSDR v{{ version }}</title>
+    <link rel="stylesheet" href="/static/css/hermitsdr.css">
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <h1>HermitSDR</h1>
+            <span class="version">v{{ version }}</span>
+        </div>
+        <div class="header-right">
+            <span id="ws-status" class="badge badge-disconnected">WS: ---</span>
+        </div>
+    </header>
+
+    <main>
+        <!-- Discovery Panel -->
+        <section class="panel" id="panel-discovery">
+            <div class="panel-header">
+                <h2>Device Discovery</h2>
+                <div class="panel-controls">
+                    <button id="btn-discover" class="btn btn-primary">Scan LAN</button>
+                    <button id="btn-discover-directed" class="btn btn-secondary">Directed</button>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div id="directed-input" class="input-row hidden">
+                    <input type="text" id="directed-ip" placeholder="192.168.x.x" class="input-text">
+                    <button id="btn-directed-go" class="btn btn-primary">Ping</button>
+                </div>
+                <table id="device-table">
+                    <thead>
+                        <tr>
+                            <th>Board</th>
+                            <th>MAC Address</th>
+                            <th>IP</th>
+                            <th>Gateware</th>
+                            <th>RX</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="device-list">
+                        <tr class="placeholder-row">
+                            <td colspan="7">No devices discovered. Click <strong>Scan LAN</strong> to search.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Radio Control Panel (hidden until connected) -->
+        <section class="panel hidden" id="panel-radio">
+            <div class="panel-header">
+                <h2>Radio Control</h2>
+                <div class="panel-controls">
+                    <button id="btn-start" class="btn btn-green">Start Stream</button>
+                    <button id="btn-stop" class="btn btn-red hidden">Stop Stream</button>
+                    <button id="btn-disconnect" class="btn btn-secondary">Disconnect</button>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="control-grid">
+                    <!-- Frequency -->
+                    <div class="control-group">
+                        <label>RX Frequency</label>
+                        <div class="freq-display" id="freq-display">7.074.000</div>
+                        <div class="input-row">
+                            <input type="number" id="freq-input" value="7074000"
+                                   min="100000" max="54000000" step="1000" class="input-text">
+                            <span class="unit">Hz</span>
+                            <button id="btn-set-freq" class="btn btn-primary">Set</button>
+                        </div>
+                        <div class="freq-presets">
+                            <button class="btn btn-tiny" data-freq="1840000">1.84</button>
+                            <button class="btn btn-tiny" data-freq="3573000">3.573</button>
+                            <button class="btn btn-tiny" data-freq="7074000">7.074</button>
+                            <button class="btn btn-tiny" data-freq="10136000">10.136</button>
+                            <button class="btn btn-tiny" data-freq="14074000">14.074</button>
+                            <button class="btn btn-tiny" data-freq="18100000">18.1</button>
+                            <button class="btn btn-tiny" data-freq="21074000">21.074</button>
+                            <button class="btn btn-tiny" data-freq="24915000">24.915</button>
+                            <button class="btn btn-tiny" data-freq="28074000">28.074</button>
+                            <button class="btn btn-tiny" data-freq="50313000">50.313</button>
+                        </div>
+                    </div>
+
+                    <!-- LNA Gain -->
+                    <div class="control-group">
+                        <label>LNA Gain: <span id="gain-value">20</span> dB</label>
+                        <input type="range" id="gain-slider" min="-12" max="48" value="20" class="slider">
+                    </div>
+
+                    <!-- Sample Rate (read-only for now) -->
+                    <div class="control-group">
+                        <label>Sample Rate</label>
+                        <div class="info-value" id="sample-rate">192,000 Hz</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Telemetry Panel (hidden until streaming) -->
+        <section class="panel hidden" id="panel-telemetry">
+            <div class="panel-header">
+                <h2>Telemetry</h2>
+                <span class="badge badge-streaming" id="stream-badge">STREAMING</span>
+            </div>
+            <div class="panel-body">
+                <div class="telemetry-grid">
+                    <div class="telem-card">
+                        <div class="telem-label">Firmware</div>
+                        <div class="telem-value" id="telem-fw">--</div>
+                    </div>
+                    <div class="telem-card">
+                        <div class="telem-label">Temperature</div>
+                        <div class="telem-value" id="telem-temp">-- &deg;C</div>
+                    </div>
+                    <div class="telem-card">
+                        <div class="telem-label">FWD Power</div>
+                        <div class="telem-value" id="telem-fwd">--</div>
+                    </div>
+                    <div class="telem-card">
+                        <div class="telem-label">REV Power</div>
+                        <div class="telem-value" id="telem-rev">--</div>
+                    </div>
+                    <div class="telem-card">
+                        <div class="telem-label">Current</div>
+                        <div class="telem-value" id="telem-current">--</div>
+                    </div>
+                    <div class="telem-card">
+                        <div class="telem-label">ADC Overload</div>
+                        <div class="telem-value" id="telem-adc">--</div>
+                    </div>
+                    <div class="telem-card">
+                        <div class="telem-label">RX Packets</div>
+                        <div class="telem-value" id="telem-rxpkt">0</div>
+                    </div>
+                    <div class="telem-card">
+                        <div class="telem-label">Seq Errors</div>
+                        <div class="telem-value" id="telem-seqerr">0</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- IQ Inspector (hidden until streaming) -->
+        <section class="panel hidden" id="panel-iq">
+            <div class="panel-header">
+                <h2>IQ Inspector</h2>
+            </div>
+            <div class="panel-body">
+                <canvas id="iq-canvas" width="600" height="300"></canvas>
+                <div class="iq-stats">
+                    <span>Samples/frame: <strong id="iq-count">0</strong></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Protocol Log -->
+        <section class="panel" id="panel-log">
+            <div class="panel-header">
+                <h2>Event Log</h2>
+                <button id="btn-clear-log" class="btn btn-tiny">Clear</button>
+            </div>
+            <div class="panel-body">
+                <div id="event-log" class="log-output"></div>
+            </div>
+        </section>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="/static/js/hermitsdr.js"></script>
+</body>
+</html>

@@ -18,9 +18,10 @@ from .discovery import HL2Discovery
 from .radio import RadioConnection, RadioState
 from .protocol import SampleRate, hex_dump, DiscoveryReply
 from .dsp import DSPPipeline, DSPConfig, ColorPalette, generate_color_palette
+from .demod import Demodulator, DemodConfig, DemodMode, AUDIO_RATE
 from .network_config import set_hl2_ip, HL2NetworkConfig, check_needs_setup
 
-__version__ = '0.3.1'
+__version__ = '0.4.0'
 
 # ──────────────────────────────────────────────
 # App setup
@@ -40,6 +41,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 discovery = HL2Discovery(timeout=2.0)
 active_radio: RadioConnection = None
 dsp_pipeline: DSPPipeline = None
+demodulator: Demodulator = None
 packet_log: list = []  # Last N raw packets for protocol inspector
 MAX_PACKET_LOG = 100
 
@@ -109,7 +111,7 @@ def api_devices():
 @app.route('/api/connect', methods=['POST'])
 def api_connect():
     """Connect to a discovered radio by MAC address."""
-    global active_radio, dsp_pipeline
+    global active_radio, dsp_pipeline, demodulator
     mac = request.json.get('mac', '') if request.is_json else ''
     devices = discovery.devices
     if mac not in devices:
@@ -119,6 +121,9 @@ def api_connect():
         if dsp_pipeline:
             dsp_pipeline.stop()
             dsp_pipeline = None
+        if demodulator:
+            demodulator.stop()
+            demodulator = None
         active_radio.disconnect()
 
     device = devices[mac]
@@ -129,6 +134,9 @@ def api_connect():
         sample_rate=active_radio.state.sample_rate.hz,
         center_freq=active_radio.state.frequency_hz,
     ))
+
+    # Create demodulator
+    demodulator = Demodulator(DemodConfig())
 
     # ── Throttled WebSocket emitters ──
     # At 192kHz, callbacks fire ~3000/sec. SocketIO can't keep up.
@@ -149,6 +157,9 @@ def api_connect():
         # Always feed DSP pipeline (fast deque append)
         if dsp_pipeline:
             dsp_pipeline.push_iq(i_samples, q_samples)
+        # Always feed demodulator
+        if demodulator:
+            demodulator.push_iq(i_samples, q_samples)
         # Throttle WebSocket IQ inspector to 10 fps
         now = time.monotonic()
         if now - _last_iq_emit[0] >= 0.1:
@@ -169,6 +180,22 @@ def api_connect():
         socketio.emit('spectral_frame', frame.to_binary())
     dsp_pipeline.on_frame(on_spectral_frame)
 
+    # Audio PCM output — stream binary float32 chunks to browser
+    _last_level_emit = [0.0]
+
+    def on_audio(audio_bytes, level_db):
+        socketio.emit('audio_pcm', audio_bytes)
+        # Throttle level updates to 10fps
+        now = time.monotonic()
+        if now - _last_level_emit[0] >= 0.1:
+            _last_level_emit[0] = now
+            socketio.emit('audio_level', {
+                'level_db': round(level_db, 1),
+                'squelched': level_db < demodulator.config.squelch_db,
+            })
+
+    demodulator.on_audio(on_audio)
+
     if not active_radio.connect():
         return jsonify({'error': 'Connection failed'}), 500
 
@@ -176,28 +203,33 @@ def api_connect():
         'status': 'connected',
         'device': device.to_dict(),
         'dsp': dsp_pipeline.get_stats(),
+        'demod': demodulator.get_stats(),
     })
 
 
 @app.route('/api/start', methods=['POST'])
 def api_start():
-    """Start IQ streaming and DSP pipeline."""
-    global active_radio, dsp_pipeline
+    """Start IQ streaming, DSP pipeline, and demodulator."""
+    global active_radio, dsp_pipeline, demodulator
     if not active_radio or not active_radio.state.connected:
         return jsonify({'error': 'Not connected'}), 400
     if active_radio.start_streaming():
         if dsp_pipeline:
             dsp_pipeline.start()
+        if demodulator:
+            demodulator.start()
         return jsonify({'status': 'streaming'})
     return jsonify({'error': 'Failed to start streaming'}), 500
 
 
 @app.route('/api/stop', methods=['POST'])
 def api_stop():
-    """Stop IQ streaming and DSP pipeline."""
-    global active_radio, dsp_pipeline
+    """Stop IQ streaming, DSP pipeline, and demodulator."""
+    global active_radio, dsp_pipeline, demodulator
     if not active_radio:
         return jsonify({'error': 'Not connected'}), 400
+    if demodulator:
+        demodulator.stop()
     if dsp_pipeline:
         dsp_pipeline.stop()
     active_radio.stop_streaming()
@@ -207,7 +239,10 @@ def api_stop():
 @app.route('/api/disconnect', methods=['POST'])
 def api_disconnect():
     """Disconnect from radio."""
-    global active_radio, dsp_pipeline
+    global active_radio, dsp_pipeline, demodulator
+    if demodulator:
+        demodulator.stop()
+        demodulator = None
     if dsp_pipeline:
         dsp_pipeline.stop()
         dsp_pipeline = None
@@ -248,8 +283,8 @@ def api_gain():
 
 @app.route('/api/state')
 def api_state():
-    """Get current radio state, telemetry, and DSP stats."""
-    global active_radio, dsp_pipeline
+    """Get current radio state, telemetry, DSP, and demod stats."""
+    global active_radio, dsp_pipeline, demodulator
     if not active_radio:
         return jsonify({'connected': False})
     result = {
@@ -262,6 +297,8 @@ def api_state():
     }
     if dsp_pipeline:
         result['dsp'] = dsp_pipeline.get_stats()
+    if demodulator:
+        result['demod'] = demodulator.get_stats()
     return jsonify(result)
 
 
@@ -291,6 +328,30 @@ def api_palette():
         palette = ColorPalette.CLASSIC
     colors = generate_color_palette(palette)
     return jsonify({'palette': name, 'colors': colors})
+
+
+@app.route('/api/demod', methods=['GET', 'POST'])
+def api_demod():
+    """Get or update demodulator configuration."""
+    global demodulator
+    if not demodulator:
+        return jsonify({'error': 'Demodulator not initialized'}), 400
+    if request.method == 'POST' and request.is_json:
+        allowed = {'mode', 'volume', 'squelch_db', 'agc_speed', 'agc_target'}
+        updates = {k: v for k, v in request.json.items() if k in allowed}
+        demodulator.reconfigure(**updates)
+    return jsonify(demodulator.get_stats())
+
+
+@app.route('/api/demod/mode', methods=['POST'])
+def api_demod_mode():
+    """Set demodulation mode (usb, lsb, cw, am)."""
+    global demodulator
+    if not demodulator:
+        return jsonify({'error': 'Demodulator not initialized'}), 400
+    mode = request.json.get('mode', 'usb') if request.is_json else 'usb'
+    demodulator.set_mode(mode)
+    return jsonify(demodulator.get_stats())
 
 
 @app.route('/api/network/config', methods=['GET'])
@@ -390,6 +451,28 @@ def ws_set_gain(data):
         emit('radio_state', {'lna_gain': gain})
 
 
+@socketio.on('set_demod_mode')
+def ws_set_demod_mode(data):
+    mode = data.get('mode', 'usb')
+    if demodulator:
+        demodulator.set_mode(mode)
+        emit('demod_state', demodulator.get_stats())
+
+
+@socketio.on('set_volume')
+def ws_set_volume(data):
+    vol = data.get('volume', 0.7)
+    if demodulator:
+        demodulator.set_volume(vol)
+
+
+@socketio.on('set_squelch')
+def ws_set_squelch(data):
+    db = data.get('squelch_db', -140)
+    if demodulator:
+        demodulator.set_squelch(db)
+
+
 # ──────────────────────────────────────────────
 # App lifecycle
 # ──────────────────────────────────────────────
@@ -403,6 +486,8 @@ def start_app(host='0.0.0.0', port=5000, debug=False):
                      allow_unsafe_werkzeug=True)
     finally:
         discovery.stop_monitor()
+        if demodulator:
+            demodulator.stop()
         if dsp_pipeline:
             dsp_pipeline.stop()
         if active_radio:

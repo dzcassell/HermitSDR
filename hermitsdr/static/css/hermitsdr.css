@@ -322,3 +322,69 @@ tr:hover td { background: rgba(0, 204, 136, 0.03); }
 .net-info { background: #1a2233; color: var(--blue); border: 1px solid #334466; }
 .net-success { background: #1a3322; color: var(--green); border: 1px solid #226633; }
 .net-error { background: #331515; color: var(--red); border: 1px solid #663333; }
+
+/* ── Audio Controls ── */
+.audio-controls {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr 1fr;
+    gap: 0.8rem 1.2rem;
+    align-items: center;
+}
+@media (max-width: 800px) {
+    .audio-controls { grid-template-columns: 1fr 1fr; }
+}
+.mode-buttons {
+    display: flex;
+    gap: 4px;
+}
+.btn-mode {
+    padding: 0.3rem 0.8rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid #2a3a4a;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.btn-mode:hover {
+    color: var(--text-bright);
+    border-color: var(--blue);
+}
+.btn-mode.active {
+    background: var(--blue);
+    color: #fff;
+    border-color: var(--blue);
+}
+.audio-meter {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0;
+}
+.meter-bar {
+    flex: 1;
+    height: 8px;
+    background: #1a2233;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+.meter-bar::after {
+    content: '';
+    display: block;
+    height: 100%;
+    width: var(--level, 0%);
+    background: linear-gradient(90deg, var(--green), var(--blue), var(--orange), var(--red));
+    border-radius: 4px;
+    transition: width 0.08s linear;
+}
+.meter-label {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    white-space: nowrap;
+}

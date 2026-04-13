@@ -86,6 +86,7 @@ const panelTelem = document.getElementById('panel-telemetry');
 const panelIQ = document.getElementById('panel-iq');
 const panelWf = document.getElementById('panel-waterfall');
 let waterfall = null;
+let audioPlayer = null;
 
 async function connectRadio(mac) {
     logMsg(`Connecting to ${mac}...`);
@@ -106,8 +107,10 @@ async function connectRadio(mac) {
 window.connectRadio = connectRadio;
 
 document.getElementById('btn-disconnect').addEventListener('click', async () => {
+    if (audioPlayer) { audioPlayer.destroy(); audioPlayer = null; }
     await fetch('/api/disconnect', {method:'POST'});
     panelRadio.classList.add('hidden'); panelTelem.classList.add('hidden'); panelIQ.classList.add('hidden'); panelWf.classList.add('hidden');
+    document.getElementById('panel-audio').classList.add('hidden');
     document.getElementById('btn-stop').classList.add('hidden');
     document.getElementById('btn-start').classList.remove('hidden');
     logMsg('Disconnected', 'warn');
@@ -123,14 +126,17 @@ document.getElementById('btn-start').addEventListener('click', async () => {
         document.getElementById('btn-start').classList.add('hidden');
         document.getElementById('btn-stop').classList.remove('hidden');
         panelTelem.classList.remove('hidden'); panelWf.classList.remove('hidden'); panelIQ.classList.remove('hidden');
+        document.getElementById('panel-audio').classList.remove('hidden');
     } else logMsg(`Start failed: ${data.error}`, 'error');
 });
 
 document.getElementById('btn-stop').addEventListener('click', async () => {
+    if (audioPlayer) { audioPlayer.destroy(); audioPlayer = null; }
     await fetch('/api/stop', {method:'POST'});
     logMsg('IQ stream stopped', 'warn');
     document.getElementById('btn-stop').classList.add('hidden');
     document.getElementById('btn-start').classList.remove('hidden');
+    document.getElementById('panel-audio').classList.add('hidden');
 });
 
 // Frequency
@@ -295,3 +301,91 @@ document.getElementById('btn-set-ip').addEventListener('click', async () => {
 
 logMsg('HermitSDR client loaded');
 logMsg('Ready for Hermes Lite 2 discovery');
+
+// ── Audio Controls ──
+
+// Enable Audio (must be triggered by user gesture for Web Audio API)
+document.getElementById('btn-audio-start').addEventListener('click', () => {
+    if (!audioPlayer) {
+        audioPlayer = new AudioPlayer(socket);
+    }
+    audioPlayer.init();
+    document.getElementById('btn-audio-start').classList.add('hidden');
+    document.getElementById('btn-audio-mute').classList.remove('hidden');
+    logMsg('Audio enabled (48kHz PCM)', 'success');
+});
+
+// Mute toggle
+let audioMuted = false;
+document.getElementById('btn-audio-mute').addEventListener('click', () => {
+    audioMuted = !audioMuted;
+    if (audioPlayer) audioPlayer.setMute(audioMuted);
+    const btn = document.getElementById('btn-audio-mute');
+    btn.textContent = audioMuted ? 'Unmute' : 'Mute';
+    btn.classList.toggle('btn-red', audioMuted);
+});
+
+// Mode buttons (USB / LSB / CW / AM)
+document.querySelectorAll('#mode-buttons .btn-mode').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#mode-buttons .btn-mode').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const mode = btn.dataset.mode;
+        socket.emit('set_demod_mode', { mode });
+        logMsg(`Mode → ${mode.toUpperCase()}`);
+    });
+});
+
+// Volume slider
+const volSlider = document.getElementById('vol-slider');
+let volTimeout;
+volSlider.addEventListener('input', () => {
+    document.getElementById('vol-value').textContent = volSlider.value;
+    if (audioPlayer) audioPlayer.setVolume(parseInt(volSlider.value) / 100);
+    clearTimeout(volTimeout);
+    volTimeout = setTimeout(() => {
+        socket.emit('set_volume', { volume: parseInt(volSlider.value) / 100 });
+    }, 100);
+});
+
+// Squelch slider
+const squelchSlider = document.getElementById('squelch-slider');
+squelchSlider.addEventListener('input', () => {
+    const val = parseInt(squelchSlider.value);
+    document.getElementById('squelch-value').textContent = val <= -140 ? 'OFF' : val + ' dB';
+    socket.emit('set_squelch', { squelch_db: val });
+});
+
+// AGC speed slider
+const agcSlider = document.getElementById('agc-slider');
+agcSlider.addEventListener('input', () => {
+    const val = parseInt(agcSlider.value) / 100;
+    const label = val < 0.03 ? 'Slow' : val < 0.15 ? 'Medium' : 'Fast';
+    document.getElementById('agc-value').textContent = label;
+    fetch('/api/demod', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ agc_speed: val })
+    });
+});
+
+// Audio level meter + buffer depth updates
+socket.on('audio_level', (data) => {
+    const db = data.level_db;
+    const levelPct = Math.max(0, Math.min(100, ((db + 100) / 80) * 100));
+    document.getElementById('audio-meter-bar').style.setProperty('--level', levelPct + '%');
+    document.getElementById('audio-level').textContent =
+        db < -150 ? '-∞ dB' : db.toFixed(1) + ' dB';
+    if (data.squelched) {
+        document.getElementById('audio-level').style.color = 'var(--orange)';
+    } else {
+        document.getElementById('audio-level').style.color = 'var(--text-dim)';
+    }
+});
+
+// Buffer depth display (updated from AudioPlayer state)
+setInterval(() => {
+    if (audioPlayer && audioPlayer.isPlaying) {
+        document.getElementById('audio-buffer').textContent =
+            'buf: ' + (audioPlayer.bufferDepth || 0) + 'ms';
+    }
+}, 500);

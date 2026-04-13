@@ -138,6 +138,47 @@
             </div>
         </section>
 
+        <!-- Audio Panel (hidden until streaming) -->
+        <section class="panel hidden" id="panel-audio">
+            <div class="panel-header">
+                <h2>Audio</h2>
+                <div class="panel-controls">
+                    <button id="btn-audio-start" class="btn btn-green btn-tiny">Enable Audio</button>
+                    <button id="btn-audio-mute" class="btn btn-tiny hidden">Mute</button>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="audio-controls">
+                    <div class="control-group">
+                        <label>Mode</label>
+                        <div class="mode-buttons" id="mode-buttons">
+                            <button class="btn btn-mode active" data-mode="usb">USB</button>
+                            <button class="btn btn-mode" data-mode="lsb">LSB</button>
+                            <button class="btn btn-mode" data-mode="cw">CW</button>
+                            <button class="btn btn-mode" data-mode="am">AM</button>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label>Volume: <span id="vol-value">70</span>%</label>
+                        <input type="range" id="vol-slider" min="0" max="100" value="70" class="slider">
+                    </div>
+                    <div class="control-group">
+                        <label>Squelch: <span id="squelch-value">OFF</span></label>
+                        <input type="range" id="squelch-slider" min="-140" max="-20" value="-140" class="slider">
+                    </div>
+                    <div class="control-group">
+                        <label>AGC Speed: <span id="agc-value">Medium</span></label>
+                        <input type="range" id="agc-slider" min="1" max="100" value="5" class="slider">
+                    </div>
+                    <div class="audio-meter">
+                        <div class="meter-bar" id="audio-meter-bar"></div>
+                        <span class="meter-label" id="audio-level">-∞ dB</span>
+                        <span class="meter-label" id="audio-buffer">buf: 0ms</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- Telemetry Panel (hidden until streaming) -->
         <section class="panel hidden" id="panel-telemetry">
             <div class="panel-header">
@@ -219,6 +260,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
     <script src="/static/js/waterfall.js"></script>
+    <script src="/static/js/audio.js"></script>
     <script src="/static/js/hermitsdr.js"></script>
 </body>
 </html>

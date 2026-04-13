@@ -4,7 +4,7 @@ FROM nvidia/cuda:12.6.3-runtime-ubuntu24.04
 
 LABEL maintainer="dzcassell" \
       description="GPU-accelerated web client for Hermes SDR compatible radios" \
-      version="0.4.0"
+      version="0.4.1"
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \

@@ -388,3 +388,133 @@ tr:hover td { background: rgba(0, 204, 136, 0.03); }
     color: var(--text-dim);
     white-space: nowrap;
 }
+
+/* ── VFO Widget ── */
+.control-group-wide {
+    grid-column: 1 / -1;
+}
+.vfo-widget {
+    outline: none;
+}
+.vfo-widget:focus-within .vfo-display {
+    box-shadow: 0 0 0 1px var(--blue);
+}
+.vfo-display {
+    display: flex;
+    align-items: baseline;
+    gap: 0;
+    padding: 0.5rem 0.8rem;
+    background: #060a0f;
+    border: 1px solid #1a2a3a;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: none;
+    transition: box-shadow 0.15s;
+}
+.vfo-digit {
+    font-family: var(--font-mono);
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-bright);
+    padding: 0 1px;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.1s;
+    line-height: 1.2;
+}
+.vfo-digit:hover {
+    color: #fff;
+    border-bottom-color: #334466;
+}
+.vfo-digit-active {
+    color: var(--green);
+    border-bottom-color: var(--green);
+}
+.vfo-digit-active:hover {
+    color: #00ffaa;
+    border-bottom-color: #00ffaa;
+}
+.vfo-sep {
+    font-family: var(--font-mono);
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-dim);
+    padding: 0 2px;
+    line-height: 1.2;
+}
+.vfo-unit {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-left: 0.6rem;
+    align-self: center;
+}
+.vfo-step-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+.vfo-step-label {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-right: 4px;
+}
+.btn-step {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid #1a2a3a;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.12s;
+}
+.btn-step:hover {
+    color: var(--text-bright);
+    border-color: #3a4a5a;
+}
+.btn-step.active {
+    background: var(--green);
+    color: #000;
+    border-color: var(--green);
+    font-weight: 600;
+}
+.vfo-direct {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 0.4rem;
+}
+.vfo-direct .input-text {
+    width: 130px;
+}
+.vfo-bands {
+    display: flex;
+    gap: 4px;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+.btn-band {
+    padding: 0.25rem 0.55rem;
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid #1a2a3a;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.12s;
+}
+.btn-band:hover {
+    color: var(--text-bright);
+    border-color: var(--blue);
+}
+.btn-band.active {
+    background: #112233;
+    color: var(--blue);
+    border-color: var(--blue);
+}

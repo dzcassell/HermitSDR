@@ -99,28 +99,9 @@
             </div>
             <div class="panel-body">
                 <div class="control-grid">
-                    <!-- Frequency -->
-                    <div class="control-group">
-                        <label>RX Frequency</label>
-                        <div class="freq-display" id="freq-display">7.074.000</div>
-                        <div class="input-row">
-                            <input type="number" id="freq-input" value="7074000"
-                                   min="100000" max="54000000" step="1000" class="input-text">
-                            <span class="unit">Hz</span>
-                            <button id="btn-set-freq" class="btn btn-primary">Set</button>
-                        </div>
-                        <div class="freq-presets">
-                            <button class="btn btn-tiny" data-freq="1840000">1.84</button>
-                            <button class="btn btn-tiny" data-freq="3573000">3.573</button>
-                            <button class="btn btn-tiny" data-freq="7074000">7.074</button>
-                            <button class="btn btn-tiny" data-freq="10136000">10.136</button>
-                            <button class="btn btn-tiny" data-freq="14074000">14.074</button>
-                            <button class="btn btn-tiny" data-freq="18100000">18.1</button>
-                            <button class="btn btn-tiny" data-freq="21074000">21.074</button>
-                            <button class="btn btn-tiny" data-freq="24915000">24.915</button>
-                            <button class="btn btn-tiny" data-freq="28074000">28.074</button>
-                            <button class="btn btn-tiny" data-freq="50313000">50.313</button>
-                        </div>
+                    <!-- VFO (frequency + bands + step) -->
+                    <div class="control-group control-group-wide" id="vfo-container">
+                        <!-- VFO widget injected by vfo.js -->
                     </div>
 
                     <!-- LNA Gain -->
@@ -261,6 +242,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
     <script src="/static/js/waterfall.js"></script>
     <script src="/static/js/audio.js"></script>
+    <script src="/static/js/vfo.js"></script>
     <script src="/static/js/hermitsdr.js"></script>
 </body>
 </html>

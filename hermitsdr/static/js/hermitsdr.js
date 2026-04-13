@@ -87,6 +87,7 @@ const panelIQ = document.getElementById('panel-iq');
 const panelWf = document.getElementById('panel-waterfall');
 let waterfall = null;
 let audioPlayer = null;
+let vfo = null;
 
 async function connectRadio(mac) {
     logMsg(`Connecting to ${mac}...`);
@@ -97,9 +98,31 @@ async function connectRadio(mac) {
             logMsg(`Connected to ${data.device.board_name} at ${data.device.source_ip}`, 'success');
             if (data.dsp) logMsg(`DSP: GPU=${data.dsp.gpu_available ? 'YES' : 'NO'} FFT=${data.dsp.config.fft_size}`, 'info');
             panelRadio.classList.remove('hidden');
-            // Initialize waterfall if not yet created
+            // Initialize VFO
+            if (!vfo && window.VFO) {
+                vfo = new VFO('vfo-container', socket);
+                vfo.onFrequencyChange((hz) => {
+                    if (waterfall) waterfall.updateCenterFreq(hz);
+                });
+                vfo.onModeChange((mode) => {
+                    logMsg(`Mode → ${mode.toUpperCase()}`);
+                });
+            }
+            // Initialize waterfall
             if (!waterfall && window.WaterfallDisplay) {
                 waterfall = new WaterfallDisplay('waterfall-container', socket);
+                // Route click-to-tune through VFO for step-snapping
+                if (vfo) {
+                    waterfall.onClickTune = (hz) => vfo.setFrequency(hz);
+                    // Bind scroll-wheel tuning on waterfall canvases
+                    // (slight delay to ensure canvases exist after WaterfallDisplay._build)
+                    setTimeout(() => {
+                        const specEl = document.getElementById('wf-spectrum');
+                        const wfEl = document.getElementById('wf-waterfall');
+                        if (specEl) vfo.bindScrollTarget(specEl);
+                        if (wfEl) vfo.bindScrollTarget(wfEl);
+                    }, 100);
+                }
             }
         } else logMsg(`Connect failed: ${data.error}`, 'error');
     } catch(e) { logMsg(`Connect error: ${e.message}`, 'error'); }
@@ -137,33 +160,6 @@ document.getElementById('btn-stop').addEventListener('click', async () => {
     document.getElementById('btn-stop').classList.add('hidden');
     document.getElementById('btn-start').classList.remove('hidden');
     document.getElementById('panel-audio').classList.add('hidden');
-});
-
-// Frequency
-function formatFreq(hz) {
-    const mhz = Math.floor(hz / 1000000);
-    const khz = Math.floor((hz % 1000000) / 1000);
-    const r = hz % 1000;
-    return `${mhz}.${String(khz).padStart(3,'0')}.${String(r).padStart(3,'0')}`;
-}
-
-document.getElementById('btn-set-freq').addEventListener('click', async () => {
-    const freq = parseInt(document.getElementById('freq-input').value);
-    if (isNaN(freq) || freq < 100000 || freq > 54000000) return;
-    const res = await fetch('/api/frequency', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({frequency:freq})});
-    const data = await res.json();
-    if (data.frequency) {
-        document.getElementById('freq-display').textContent = formatFreq(data.frequency);
-        if (waterfall) waterfall.updateCenterFreq(data.frequency);
-        logMsg(`Frequency set to ${formatFreq(data.frequency)} MHz`);
-    }
-});
-
-document.querySelectorAll('.freq-presets .btn-tiny').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.getElementById('freq-input').value = btn.dataset.freq;
-        document.getElementById('btn-set-freq').click();
-    });
 });
 
 // LNA Gain
@@ -333,6 +329,8 @@ document.querySelectorAll('#mode-buttons .btn-mode').forEach(btn => {
         const mode = btn.dataset.mode;
         socket.emit('set_demod_mode', { mode });
         logMsg(`Mode → ${mode.toUpperCase()}`);
+        // Sync to VFO band memory
+        if (vfo) vfo.syncMode(mode);
     });
 });
 

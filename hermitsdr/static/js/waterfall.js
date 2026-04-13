@@ -52,6 +52,9 @@ class WaterfallDisplay {
         this.currentPower = null;
         this.currentPeak = null;
 
+        // Click-to-tune callback (set externally to route through VFO)
+        this.onClickTune = null;
+
         this._build();
         this._loadPalette('classic');
         this._bindSocket();
@@ -212,7 +215,11 @@ class WaterfallDisplay {
             const x = e.clientX - rect.left;
             const freqOffset = (x / rect.width - 0.5) * this.bandwidth;
             const newFreq = Math.round(this.centerFreq + freqOffset);
-            this.socket.emit('set_frequency', { frequency: newFreq });
+            if (this.onClickTune) {
+                this.onClickTune(newFreq);
+            } else {
+                this.socket.emit('set_frequency', { frequency: newFreq });
+            }
         });
     }
 

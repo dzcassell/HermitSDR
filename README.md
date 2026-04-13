@@ -200,6 +200,7 @@ HermitSDR/
 │   │   └── js/
 │   │       ├── audio.js      # Web Audio API player (scheduled BufferSourceNodes)
 │   │       ├── hermitsdr.js  # Client app (discovery, controls, telemetry)
+│   │       ├── vfo.js        # VFO widget (scroll-wheel tune, step sizes, band memory)
 │   │       └── waterfall.js  # Spectrum scope + scrolling waterfall renderer
 │   └── templates/
 │       └── index.html

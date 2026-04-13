@@ -5,7 +5,7 @@
 
 A GPU-accelerated web client for Hermes SDR compatible radios.
 
-**Phase 1**: Device discovery, connection management, live telemetry, IQ inspection, and protocol test harnesses for Hermes Lite 2 development.
+**Features**: Device discovery, live waterfall/spectrum display, USB/LSB/CW/AM audio demodulation with Web Audio playback, telemetry, IQ inspection, network bootstrapping, and protocol test harnesses for Hermes Lite 2.
 
 ## Architecture
 
@@ -13,8 +13,8 @@ A GPU-accelerated web client for Hermes SDR compatible radios.
 ┌──────────────────────────────────────────────────────┐
 │  Browser (any device on LAN)                         │
 │  ┌────────────────────────────────────────────────┐  │
-│  │  Discovery UI │ Radio Control │ IQ Inspector   │  │
-│  │  Telemetry    │ Waterfall (Phase 2)            │  │
+│  │  Discovery │ Radio Control │ Audio (USB/LSB/…) │  │
+│  │  Waterfall │ Telemetry     │ IQ Inspector      │  │
 │  └──────────────────┬─────────────────────────────┘  │
 │                     │ WebSocket + REST                │
 └─────────────────────┼────────────────────────────────┘
@@ -28,10 +28,10 @@ A GPU-accelerated web client for Hermes SDR compatible radios.
 │  │  │ UDP bcast   │  │ IQ stream / C&C / telem│   │  │
 │  │  └─────────────┘  └──────────┬─────────────┘   │  │
 │  │                              │                  │  │
-│  │  ┌───────────────────────────┴──────────────┐   │  │
-│  │  │  CuPy FFT Pipeline (RTX 5070 Ti)        │   │  │
-│  │  │  GPU-accelerated spectral processing     │   │  │
-│  │  └──────────────────────────────────────────┘   │  │
+│  │  ┌───────────────┬───────────┴──────────────┐   │  │
+│  │  │ CuPy FFT     │ Demodulator              │   │  │
+│  │  │ Spectrum/WF   │ USB/LSB/CW/AM → 48k PCM │   │  │
+│  │  └───────────────┴──────────────────────────┘   │  │
 │  └─────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────┘
                       │ UDP :1024
@@ -189,6 +189,7 @@ HermitSDR/
 │   ├── __init__.py
 │   ├── __main__.py           # CLI entry point
 │   ├── app.py                # Flask + SocketIO web app
+│   ├── demod.py              # Audio demodulator (USB/LSB/CW/AM, FIR, AGC)
 │   ├── discovery.py          # UDP broadcast discovery
 │   ├── dsp.py                # GPU-accelerated FFT pipeline (CuPy / numpy)
 │   ├── network_config.py     # HL2 EEPROM IP programming via I2C2
@@ -197,6 +198,7 @@ HermitSDR/
 │   ├── static/
 │   │   ├── css/hermitsdr.css # Dark SDR theme
 │   │   └── js/
+│   │       ├── audio.js      # Web Audio API player (scheduled BufferSourceNodes)
 │   │       ├── hermitsdr.js  # Client app (discovery, controls, telemetry)
 │   │       └── waterfall.js  # Spectrum scope + scrolling waterfall renderer
 │   └── templates/
@@ -206,6 +208,7 @@ HermitSDR/
 └── tests/
     ├── test_protocol.py       # Protocol unit tests (22 tests)
     ├── test_dsp.py            # DSP pipeline unit tests (17 tests)
+    ├── test_demod.py          # Demodulator unit tests (30 tests)
     └── mock_hl2.py            # Mock HL2 simulator for testing
 ```
 
@@ -214,7 +217,7 @@ HermitSDR/
 - [x] **Phase 1**: Discovery, connection, telemetry, IQ inspector, protocol harness
 - [x] **Phase 2**: GPU-accelerated waterfall (CuPy FFT → Canvas rendering, 4 palettes, binary WebSocket transport)
 - [x] **Phase 2b**: Network bootstrapping (EEPROM IP programming, APIPA detection)
-- [ ] **Phase 3**: Audio demodulation (USB, LSB, CW, AM → Web Audio API)
+- [x] **Phase 3**: Audio demodulation (USB, LSB, CW, AM → Web Audio API, AGC, squelch)
 - [ ] **Phase 4**: Multi-receiver support, wideband bandscope
 - [ ] **Phase 5**: Filter controls, WebGL rendering, band presets
 

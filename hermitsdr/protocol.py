@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Optional
 
+import numpy as np
+
 
 # ──────────────────────────────────────────────
 # Constants
@@ -506,6 +508,9 @@ def parse_usb_frame(frame_data: bytes) -> Optional[IQFrame]:
         [8:]   = 63 × (I2 I1 I0 Q2 Q1 Q0 M1 M0) = 63 × 8 bytes
 
     I and Q are 24-bit signed big-endian. M (mic) is 16-bit, ignored.
+
+    Uses numpy vectorized ops to avoid per-sample Python loops —
+    critical at 192kHz where this runs ~3000×/sec.
     """
     if len(frame_data) < USB_FRAME_LEN:
         return None
@@ -513,16 +518,23 @@ def parse_usb_frame(frame_data: bytes) -> Optional[IQFrame]:
         return None
 
     cc = parse_cc_status(frame_data[3:8])
-    i_samples = []
-    q_samples = []
 
-    offset = 8
-    for _ in range(SAMPLES_PER_FRAME):
-        i_raw = (frame_data[offset] << 16) | (frame_data[offset + 1] << 8) | frame_data[offset + 2]
-        q_raw = (frame_data[offset + 3] << 16) | (frame_data[offset + 4] << 8) | frame_data[offset + 5]
-        i_samples.append(_sign_extend_24(i_raw))
-        q_samples.append(_sign_extend_24(q_raw))
-        offset += SAMPLE_BYTES  # skip mic bytes too
+    # Vectorized extraction: reshape 504 sample bytes into (63, 8)
+    raw = np.frombuffer(frame_data, dtype=np.uint8, offset=8,
+                        count=SAMPLES_PER_FRAME * SAMPLE_BYTES)
+    raw = raw.reshape(SAMPLES_PER_FRAME, SAMPLE_BYTES)
+
+    # 24-bit big-endian → int32: I = bytes 0,1,2; Q = bytes 3,4,5
+    i_raw = (raw[:, 0].astype(np.int32) << 16 |
+             raw[:, 1].astype(np.int32) << 8 |
+             raw[:, 2].astype(np.int32))
+    q_raw = (raw[:, 3].astype(np.int32) << 16 |
+             raw[:, 4].astype(np.int32) << 8 |
+             raw[:, 5].astype(np.int32))
+
+    # Sign-extend 24-bit → 32-bit
+    i_samples = np.where(i_raw & 0x800000, i_raw - 0x1000000, i_raw)
+    q_samples = np.where(q_raw & 0x800000, q_raw - 0x1000000, q_raw)
 
     return IQFrame(cc=cc, i_samples=i_samples, q_samples=q_samples)
 

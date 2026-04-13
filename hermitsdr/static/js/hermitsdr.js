@@ -175,10 +175,10 @@ gainSlider.addEventListener('input', () => {
 // Telemetry
 socket.on('telemetry', (t) => {
     document.getElementById('telem-fw').textContent = t.firmware_version || '--';
-    document.getElementById('telem-temp').textContent = t.temperature_raw || '--';
+    document.getElementById('telem-temp').textContent = t.temperature_c ? t.temperature_c + ' °C' : '--';
     document.getElementById('telem-fwd').textContent = t.forward_power_raw || '--';
     document.getElementById('telem-rev').textContent = t.reverse_power_raw || '--';
-    document.getElementById('telem-current').textContent = t.current_raw || '--';
+    document.getElementById('telem-current').textContent = t.current_ma ? t.current_ma + ' mA' : '--';
     const adcEl = document.getElementById('telem-adc');
     adcEl.textContent = t.adc_overload ? 'OVL' : 'OK';
     adcEl.style.color = t.adc_overload ? 'var(--red)' : 'var(--green)';

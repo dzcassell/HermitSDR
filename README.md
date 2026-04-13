@@ -187,27 +187,36 @@ HermitSDR/
 ├── INSTALL.sh
 ├── hermitsdr/
 │   ├── __init__.py
-│   ├── __main__.py        # CLI entry point
-│   ├── app.py             # Flask + SocketIO web app
-│   ├── discovery.py       # UDP broadcast discovery
-│   ├── protocol.py        # HPSDR Protocol 1 encoding/decoding
-│   ├── radio.py           # Radio connection + IQ stream manager
+│   ├── __main__.py           # CLI entry point
+│   ├── app.py                # Flask + SocketIO web app
+│   ├── discovery.py          # UDP broadcast discovery
+│   ├── dsp.py                # GPU-accelerated FFT pipeline (CuPy / numpy)
+│   ├── network_config.py     # HL2 EEPROM IP programming via I2C2
+│   ├── protocol.py           # HPSDR Protocol 1 encoding/decoding
+│   ├── radio.py              # Radio connection + IQ stream manager
 │   ├── static/
-│   │   ├── css/hermitsdr.css
-│   │   └── js/hermitsdr.js
+│   │   ├── css/hermitsdr.css # Dark SDR theme
+│   │   └── js/
+│   │       ├── hermitsdr.js  # Client app (discovery, controls, telemetry)
+│   │       └── waterfall.js  # Spectrum scope + scrolling waterfall renderer
 │   └── templates/
 │       └── index.html
+├── tools/
+│   └── hl2_set_ip.py         # CLI tool: program HL2 fixed IP via EEPROM
 └── tests/
-    ├── test_protocol.py   # Protocol unit tests
-    └── mock_hl2.py        # Mock HL2 for testing
+    ├── test_protocol.py       # Protocol unit tests (22 tests)
+    ├── test_dsp.py            # DSP pipeline unit tests (17 tests)
+    └── mock_hl2.py            # Mock HL2 simulator for testing
 ```
 
 ## Roadmap
 
 - [x] **Phase 1**: Discovery, connection, telemetry, IQ inspector, protocol harness
-- [ ] **Phase 2**: GPU-accelerated waterfall (CuPy FFT → WebGL/Canvas rendering)
-- [ ] **Phase 3**: Multi-receiver support, wideband bandscope
-- [ ] **Phase 4**: Demodulation, audio output, filter controls
+- [x] **Phase 2**: GPU-accelerated waterfall (CuPy FFT → Canvas rendering, 4 palettes, binary WebSocket transport)
+- [x] **Phase 2b**: Network bootstrapping (EEPROM IP programming, APIPA detection)
+- [ ] **Phase 3**: Audio demodulation (USB, LSB, CW, AM → Web Audio API)
+- [ ] **Phase 4**: Multi-receiver support, wideband bandscope
+- [ ] **Phase 5**: Filter controls, WebGL rendering, band presets
 
 ## License
 

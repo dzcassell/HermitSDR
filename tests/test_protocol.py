@@ -88,3 +88,31 @@ class TestUtils:
         assert SampleRate.SR_192K.hz == 192000 and SampleRate.from_hz(192000) == SampleRate.SR_192K
 
 if __name__ == '__main__': pytest.main([__file__, '-v'])
+
+
+class TestTelemetry:
+    """Test telemetry scaling in RadioTelemetry."""
+
+    def test_temperature_scaling(self):
+        from hermitsdr.radio import RadioTelemetry
+        t = RadioTelemetry(temperature_raw=1051)
+        assert abs(t.temperature_c - 65.7) < 0.1  # 1051 / 16.0
+
+    def test_temperature_zero(self):
+        from hermitsdr.radio import RadioTelemetry
+        t = RadioTelemetry(temperature_raw=0)
+        assert t.temperature_c == 0.0
+
+    def test_current_scaling(self):
+        from hermitsdr.radio import RadioTelemetry
+        t = RadioTelemetry(current_raw=100)
+        # (100 * 3.26 / 4096) / 0.050 ≈ 1592 mA
+        assert t.current_ma > 0
+
+    def test_to_dict_has_scaled(self):
+        from hermitsdr.radio import RadioTelemetry
+        t = RadioTelemetry(temperature_raw=800, current_raw=50)
+        d = t.to_dict()
+        assert 'temperature_c' in d
+        assert 'current_ma' in d
+        assert d['temperature_c'] == 50.0  # 800 / 16.0

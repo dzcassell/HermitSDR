@@ -33,7 +33,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class RadioTelemetry:
-    """Live telemetry from the HL2."""
+    """Live telemetry from the HL2.
+
+    Raw values are ADC readings. Scaled values use HL2-standard
+    conversion formulas (may need per-device calibration):
+      - Temperature: I2C sensor in LM75 format → raw / 16.0 °C
+      - FWD/REV power: ADC counts (meaningful only when transmitting)
+      - Current: ADC counts → raw * 3.26 / 4096 / 0.04 mA (50mV/A sense)
+    """
     firmware_version: int = 0
     adc_overload: bool = False
     temperature_raw: int = 0
@@ -51,14 +58,34 @@ class RadioTelemetry:
     rx_sequence_errors: int = 0
     last_sequence: int = -1
 
+    @property
+    def temperature_c(self) -> float:
+        """Temperature in °C (LM75-format I2C sensor: raw / 16.0)."""
+        if self.temperature_raw == 0:
+            return 0.0
+        return self.temperature_raw / 16.0
+
+    @property
+    def current_ma(self) -> float:
+        """Board current in mA (HL2 50mV/A current sense via ADC).
+
+        Formula: ADC_voltage = raw * 3.26 / 4096
+        Current = ADC_voltage / 0.050  (50mV per amp)
+        """
+        if self.current_raw == 0:
+            return 0.0
+        return (self.current_raw * 3.26 / 4096.0) / 0.050
+
     def to_dict(self) -> dict:
         return {
             'firmware_version': self.firmware_version,
             'adc_overload': self.adc_overload,
             'temperature_raw': self.temperature_raw,
+            'temperature_c': round(self.temperature_c, 1),
             'forward_power_raw': self.forward_power_raw,
             'reverse_power_raw': self.reverse_power_raw,
             'current_raw': self.current_raw,
+            'current_ma': round(self.current_ma, 0),
             'ptt': self.ptt,
             'dot': self.dot,
             'rx_packets': self.rx_packets,
@@ -313,12 +340,7 @@ class RadioConnection:
         for frame in (frame1, frame2):
             self._update_telemetry(frame.cc)
 
-            # Buffer IQ samples
-            with self._lock:
-                for i_val, q_val in zip(frame.i_samples, frame.q_samples):
-                    self._iq_buffer.append((i_val, q_val))
-
-            # Notify IQ callbacks
+            # Notify IQ callbacks (DSP pipeline consumes via callback)
             for cb in self._iq_callbacks:
                 try:
                     cb(frame.i_samples, frame.q_samples)
@@ -359,18 +381,15 @@ class RadioConnection:
         The HL2 expects 1032-byte packets every ~2.625ms to maintain
         the streaming connection. We send silence (zeros) with C&C
         commands interleaved.
+
+        Default C&C commands cycle through the current radio state
+        (sample rate, frequency, gain). They're rebuilt each iteration
+        from self.state so that user changes (frequency, gain) are
+        reflected immediately — not stale from startup.
         """
         logger.info(f"TX loop started → {self.device.source_ip}:{METIS_PORT}")
         interval = 0.002625  # ~2.625ms per packet
         tx_count = 0
-
-        # Default C&C: cycle through config registers
-        default_cc_cycle = [
-            cc_set_sample_rate(self.state.sample_rate,
-                               self.state.num_receivers, self.state.duplex),
-            cc_set_frequency(1, self.state.frequency_hz),
-            cc_set_lna_gain(self.state.lna_gain_db),
-        ]
         cc_idx = 0
 
         while self._running:
@@ -383,12 +402,21 @@ class RadioConnection:
                 if self._cc_queue:
                     cc2 = self._cc_queue.popleft()
 
-                if cc1 is None:
-                    cc1 = default_cc_cycle[cc_idx % len(default_cc_cycle)]
-                    cc_idx += 1
-                if cc2 is None:
-                    cc2 = default_cc_cycle[cc_idx % len(default_cc_cycle)]
-                    cc_idx += 1
+                # Build default commands from LIVE state (not a snapshot)
+                if cc1 is None or cc2 is None:
+                    defaults = [
+                        cc_set_sample_rate(self.state.sample_rate,
+                                           self.state.num_receivers,
+                                           self.state.duplex),
+                        cc_set_frequency(1, self.state.frequency_hz),
+                        cc_set_lna_gain(self.state.lna_gain_db),
+                    ]
+                    if cc1 is None:
+                        cc1 = defaults[cc_idx % len(defaults)]
+                        cc_idx += 1
+                    if cc2 is None:
+                        cc2 = defaults[cc_idx % len(defaults)]
+                        cc_idx += 1
 
                 pkt = build_iq_packet(cc1, cc2)
                 self._sock.sendto(pkt, (self.device.source_ip, METIS_PORT))

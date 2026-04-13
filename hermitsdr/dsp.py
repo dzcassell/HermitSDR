@@ -10,6 +10,7 @@ Pipeline: IQ → Window → FFT → |·|² → dBFS → Averaging → Output
 """
 
 import time
+import struct
 import logging
 import threading
 from collections import deque
@@ -115,7 +116,6 @@ class SpectralFrame:
             [24:]    Power data (float32 LE array)
             [24+N*4:] Peak data if present
         """
-        import struct
         flags = 0x01 if self.peak_dbfs is not None else 0x00
         header = struct.pack('<4sIIIHHf',
             b'SPC\x00',
@@ -175,9 +175,14 @@ class DSPPipeline:
         self._callbacks.append(callback)
 
     def push_iq(self, i_samples: list, q_samples: list):
-        """Push IQ samples into the pipeline buffer."""
-        for i_val, q_val in zip(i_samples, q_samples):
-            self._iq_buffer.append(complex(i_val, q_val))
+        """Push IQ samples into the pipeline buffer.
+
+        Converts integer I/Q sample lists to complex and extends the
+        buffer. Uses batch conversion (not per-sample) for throughput.
+        """
+        # Batch convert to complex — much faster than per-sample loop
+        iq = np.array(i_samples, dtype=np.float64) + 1j * np.array(q_samples, dtype=np.float64)
+        self._iq_buffer.extend(iq)
 
     def start(self):
         """Start the DSP processing thread."""
@@ -274,22 +279,18 @@ class DSPPipeline:
                 time.sleep(0.005)
                 continue
 
-            # Extract samples from buffer
+            # Extract samples from buffer (batch, not per-sample)
             with self._lock:
-                hop = int(needed * (1 - self.config.overlap))
-                hop = max(1, hop)
-                samples = []
-                for _ in range(needed):
-                    if self._iq_buffer:
-                        samples.append(self._iq_buffer.popleft())
-                    else:
-                        break
-
-                # Put back the overlap portion
+                hop = max(1, int(needed * (1 - self.config.overlap)))
+                # Batch pop — convert deque slice to list in one shot
+                samples = [self._iq_buffer.popleft() for _ in
+                           range(min(needed, len(self._iq_buffer)))]
+                # Put back overlap portion for next FFT window
                 overlap_count = needed - hop
                 if overlap_count > 0 and len(samples) == needed:
-                    for s in samples[-overlap_count:]:
-                        self._iq_buffer.appendleft(s)
+                    overlap = samples[-overlap_count:]
+                    # extendleft reverses, so reverse first
+                    self._iq_buffer.extendleft(reversed(overlap))
 
             if len(samples) < needed:
                 time.sleep(0.005)

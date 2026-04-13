@@ -153,9 +153,12 @@ def api_connect():
         now = time.monotonic()
         if now - _last_iq_emit[0] >= 0.1:
             _last_iq_emit[0] = now
+            # .tolist() handles both numpy arrays and plain lists
+            i_preview = list(i_samples[:8]) if hasattr(i_samples, 'tolist') else i_samples[:8]
+            q_preview = list(q_samples[:8]) if hasattr(q_samples, 'tolist') else q_samples[:8]
             socketio.emit('iq_sample', {
-                'i': i_samples[:8],
-                'q': q_samples[:8],
+                'i': i_preview,
+                'q': q_preview,
                 'count': len(i_samples),
             })
 

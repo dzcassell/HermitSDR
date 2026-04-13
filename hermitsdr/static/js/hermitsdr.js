@@ -66,6 +66,8 @@ function renderDevices(devices) {
 const panelRadio = document.getElementById('panel-radio');
 const panelTelem = document.getElementById('panel-telemetry');
 const panelIQ = document.getElementById('panel-iq');
+const panelWf = document.getElementById('panel-waterfall');
+let waterfall = null;
 
 async function connectRadio(mac) {
     logMsg(`Connecting to ${mac}...`);
@@ -74,7 +76,12 @@ async function connectRadio(mac) {
         const data = await res.json();
         if (data.status === 'connected') {
             logMsg(`Connected to ${data.device.board_name} at ${data.device.source_ip}`, 'success');
+            if (data.dsp) logMsg(`DSP: GPU=${data.dsp.gpu_available ? 'YES' : 'NO'} FFT=${data.dsp.config.fft_size}`, 'info');
             panelRadio.classList.remove('hidden');
+            // Initialize waterfall if not yet created
+            if (!waterfall && window.WaterfallDisplay) {
+                waterfall = new WaterfallDisplay('waterfall-container', socket);
+            }
         } else logMsg(`Connect failed: ${data.error}`, 'error');
     } catch(e) { logMsg(`Connect error: ${e.message}`, 'error'); }
 }
@@ -82,7 +89,7 @@ window.connectRadio = connectRadio;
 
 document.getElementById('btn-disconnect').addEventListener('click', async () => {
     await fetch('/api/disconnect', {method:'POST'});
-    panelRadio.classList.add('hidden'); panelTelem.classList.add('hidden'); panelIQ.classList.add('hidden');
+    panelRadio.classList.add('hidden'); panelTelem.classList.add('hidden'); panelIQ.classList.add('hidden'); panelWf.classList.add('hidden');
     document.getElementById('btn-stop').classList.add('hidden');
     document.getElementById('btn-start').classList.remove('hidden');
     logMsg('Disconnected', 'warn');
@@ -97,7 +104,7 @@ document.getElementById('btn-start').addEventListener('click', async () => {
         logMsg('IQ stream active', 'success');
         document.getElementById('btn-start').classList.add('hidden');
         document.getElementById('btn-stop').classList.remove('hidden');
-        panelTelem.classList.remove('hidden'); panelIQ.classList.remove('hidden');
+        panelTelem.classList.remove('hidden'); panelWf.classList.remove('hidden'); panelIQ.classList.remove('hidden');
     } else logMsg(`Start failed: ${data.error}`, 'error');
 });
 
@@ -123,6 +130,7 @@ document.getElementById('btn-set-freq').addEventListener('click', async () => {
     const data = await res.json();
     if (data.frequency) {
         document.getElementById('freq-display').textContent = formatFreq(data.frequency);
+        if (waterfall) waterfall.updateCenterFreq(data.frequency);
         logMsg(`Frequency set to ${formatFreq(data.frequency)} MHz`);
     }
 });

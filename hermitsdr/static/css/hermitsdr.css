@@ -183,3 +183,102 @@ tr:hover td { background: rgba(0, 204, 136, 0.03); }
     .control-grid { grid-template-columns: 1fr; }
     .telemetry-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ═══ Waterfall Display ═══ */
+.wf-panel-body { padding: 0.5rem; }
+#waterfall-container { width: 100%; }
+
+.wf-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 4px 4px 0 0;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+.wf-readout {
+    display: flex;
+    gap: 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-bright);
+}
+#wf-freq-readout { color: var(--freq-color); font-weight: 600; min-width: 10ch; }
+#wf-db-readout { color: var(--orange); min-width: 8ch; }
+#wf-fps { color: var(--text-dim); }
+
+.wf-controls {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.wf-controls label {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.wf-controls select {
+    padding: 0.15rem 0.3rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+}
+.wf-controls select:focus { outline: none; border-color: var(--accent); }
+.slider-sm { width: 60px; accent-color: var(--accent); }
+.input-sm { width: 60px; font-size: 0.75rem; padding: 0.15rem 0.3rem; }
+
+.wf-display {
+    position: relative;
+    width: 100%;
+    height: 480px;
+    background: var(--bg);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+}
+.wf-canvas-spectrum {
+    width: 100%;
+    height: 150px;
+    display: block;
+    cursor: crosshair;
+}
+.wf-canvas-axis {
+    width: 100%;
+    height: 28px;
+    display: block;
+}
+.wf-canvas-waterfall {
+    width: 100%;
+    flex: 1;
+    display: block;
+    min-height: 200px;
+}
+
+.wf-db-range {
+    display: flex;
+    gap: 1rem;
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 0 0 4px 4px;
+}
+.wf-db-range label {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}

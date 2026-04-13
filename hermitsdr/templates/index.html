@@ -148,6 +148,16 @@
             </div>
         </section>
 
+        <!-- Waterfall Display (hidden until streaming) -->
+        <section class="panel hidden" id="panel-waterfall">
+            <div class="panel-header">
+                <h2>Waterfall</h2>
+            </div>
+            <div class="panel-body wf-panel-body">
+                <div id="waterfall-container"></div>
+            </div>
+        </section>
+
         <!-- IQ Inspector (hidden until streaming) -->
         <section class="panel hidden" id="panel-iq">
             <div class="panel-header">
@@ -174,6 +184,7 @@
     </main>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="/static/js/waterfall.js"></script>
     <script src="/static/js/hermitsdr.js"></script>
 </body>
 </html>

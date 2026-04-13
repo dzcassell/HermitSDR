@@ -17,8 +17,9 @@ from flask_socketio import SocketIO, emit
 from .discovery import HL2Discovery
 from .radio import RadioConnection, RadioState
 from .protocol import SampleRate, hex_dump, DiscoveryReply
+from .dsp import DSPPipeline, DSPConfig, ColorPalette, generate_color_palette
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 # ──────────────────────────────────────────────
 # App setup
@@ -37,6 +38,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 # Global state
 discovery = HL2Discovery(timeout=2.0)
 active_radio: RadioConnection = None
+dsp_pipeline: DSPPipeline = None
 packet_log: list = []  # Last N raw packets for protocol inspector
 MAX_PACKET_LOG = 100
 
@@ -106,23 +108,36 @@ def api_devices():
 @app.route('/api/connect', methods=['POST'])
 def api_connect():
     """Connect to a discovered radio by MAC address."""
-    global active_radio
+    global active_radio, dsp_pipeline
     mac = request.json.get('mac', '') if request.is_json else ''
     devices = discovery.devices
     if mac not in devices:
         return jsonify({'error': f'Device {mac} not found'}), 404
 
     if active_radio:
+        if dsp_pipeline:
+            dsp_pipeline.stop()
+            dsp_pipeline = None
         active_radio.disconnect()
 
     device = devices[mac]
     active_radio = RadioConnection(device)
 
+    # Create DSP pipeline
+    dsp_pipeline = DSPPipeline(DSPConfig(
+        sample_rate=active_radio.state.sample_rate.hz,
+        center_freq=active_radio.state.frequency_hz,
+    ))
+
     # Wire up telemetry to WebSocket
     active_radio.on_telemetry(lambda t: socketio.emit('telemetry', t.to_dict()))
 
-    # Wire up IQ data callback for protocol inspector
+    # Wire IQ data to both inspector and DSP pipeline
     def on_iq(i_samples, q_samples):
+        # Feed DSP pipeline
+        if dsp_pipeline:
+            dsp_pipeline.push_iq(i_samples, q_samples)
+        # Send small sample for IQ inspector
         socketio.emit('iq_sample', {
             'i': i_samples[:8],
             'q': q_samples[:8],
@@ -130,32 +145,42 @@ def api_connect():
         })
     active_radio.on_iq_data(on_iq)
 
+    # Wire spectral frames to WebSocket (binary)
+    def on_spectral_frame(frame):
+        socketio.emit('spectral_frame', frame.to_binary())
+    dsp_pipeline.on_frame(on_spectral_frame)
+
     if not active_radio.connect():
         return jsonify({'error': 'Connection failed'}), 500
 
     return jsonify({
         'status': 'connected',
         'device': device.to_dict(),
+        'dsp': dsp_pipeline.get_stats(),
     })
 
 
 @app.route('/api/start', methods=['POST'])
 def api_start():
-    """Start IQ streaming."""
-    global active_radio
+    """Start IQ streaming and DSP pipeline."""
+    global active_radio, dsp_pipeline
     if not active_radio or not active_radio.state.connected:
         return jsonify({'error': 'Not connected'}), 400
     if active_radio.start_streaming():
+        if dsp_pipeline:
+            dsp_pipeline.start()
         return jsonify({'status': 'streaming'})
     return jsonify({'error': 'Failed to start streaming'}), 500
 
 
 @app.route('/api/stop', methods=['POST'])
 def api_stop():
-    """Stop IQ streaming."""
-    global active_radio
+    """Stop IQ streaming and DSP pipeline."""
+    global active_radio, dsp_pipeline
     if not active_radio:
         return jsonify({'error': 'Not connected'}), 400
+    if dsp_pipeline:
+        dsp_pipeline.stop()
     active_radio.stop_streaming()
     return jsonify({'status': 'stopped'})
 
@@ -163,7 +188,10 @@ def api_stop():
 @app.route('/api/disconnect', methods=['POST'])
 def api_disconnect():
     """Disconnect from radio."""
-    global active_radio
+    global active_radio, dsp_pipeline
+    if dsp_pipeline:
+        dsp_pipeline.stop()
+        dsp_pipeline = None
     if active_radio:
         active_radio.disconnect()
         active_radio = None
@@ -180,6 +208,9 @@ def api_frequency():
     if not (100000 <= freq <= 54000000):
         return jsonify({'error': 'Frequency out of range (100kHz - 54MHz)'}), 400
     active_radio.set_frequency(freq)
+    # Sync DSP center frequency
+    if dsp_pipeline:
+        dsp_pipeline.reconfigure(center_freq=freq)
     return jsonify({'frequency': freq})
 
 
@@ -198,18 +229,49 @@ def api_gain():
 
 @app.route('/api/state')
 def api_state():
-    """Get current radio state and telemetry."""
-    global active_radio
+    """Get current radio state, telemetry, and DSP stats."""
+    global active_radio, dsp_pipeline
     if not active_radio:
         return jsonify({'connected': False})
-    return jsonify({
+    result = {
         'connected': active_radio.state.connected,
         'streaming': active_radio.state.streaming,
         'frequency': active_radio.state.frequency_hz,
         'sample_rate': active_radio.state.sample_rate.hz,
         'lna_gain': active_radio.state.lna_gain_db,
         'telemetry': active_radio.telemetry.to_dict(),
-    })
+    }
+    if dsp_pipeline:
+        result['dsp'] = dsp_pipeline.get_stats()
+    return jsonify(result)
+
+
+@app.route('/api/dsp', methods=['GET', 'POST'])
+def api_dsp():
+    """Get or update DSP pipeline configuration."""
+    global dsp_pipeline
+    if not dsp_pipeline:
+        return jsonify({'error': 'DSP not initialized'}), 400
+    if request.method == 'POST' and request.is_json:
+        allowed = {'fft_size', 'averaging', 'peak_hold', 'peak_decay',
+                    'db_min', 'db_max', 'fps_target', 'overlap', 'window'}
+        updates = {k: v for k, v in request.json.items() if k in allowed}
+        if 'fft_size' in updates:
+            updates['fft_size'] = max(256, min(16384, int(updates['fft_size'])))
+        dsp_pipeline.reconfigure(**updates)
+    return jsonify(dsp_pipeline.get_stats())
+
+
+@app.route('/api/palette')
+def api_palette():
+    """Get color palette RGB data for waterfall rendering."""
+    name = request.args.get('name', 'classic')
+    try:
+        palette = ColorPalette(name)
+    except ValueError:
+        palette = ColorPalette.CLASSIC
+    colors = generate_color_palette(palette)
+    return jsonify({'palette': name, 'colors': colors})
 
 
 @app.route('/api/packet_log')
@@ -251,6 +313,8 @@ def ws_set_frequency(data):
     freq = data.get('frequency', 0)
     if active_radio and active_radio.state.connected:
         active_radio.set_frequency(freq)
+        if dsp_pipeline:
+            dsp_pipeline.reconfigure(center_freq=freq)
         emit('radio_state', {'frequency': freq})
 
 
@@ -275,5 +339,7 @@ def start_app(host='0.0.0.0', port=5000, debug=False):
                      allow_unsafe_werkzeug=True)
     finally:
         discovery.stop_monitor()
+        if dsp_pipeline:
+            dsp_pipeline.stop()
         if active_radio:
             active_radio.disconnect()

@@ -436,12 +436,18 @@ def ws_discover():
 @socketio.on('set_frequency')
 def ws_set_frequency(data):
     freq = int(data.get('frequency', 0))
+    if not (100000 <= freq <= 54000000):
+        logger.warning(f"Frequency out of range: {freq} Hz")
+        return
     if active_radio and active_radio.state.connected:
-        logger.info(f"Tuning to {freq} Hz ({freq/1e6:.6f} MHz)")
+        logger.info(f"TUNE → {freq} Hz ({freq/1e6:.6f} MHz) "
+                    f"[queue depth before: {len(active_radio._cc_queue)}]")
         active_radio.set_frequency(freq)
         if dsp_pipeline:
             dsp_pipeline.reconfigure(center_freq=freq)
         emit('radio_state', {'frequency': freq})
+    else:
+        logger.warning(f"set_frequency({freq}) ignored — radio not connected")
 
 
 @socketio.on('set_gain')

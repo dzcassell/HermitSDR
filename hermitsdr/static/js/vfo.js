@@ -21,13 +21,17 @@ class VFO {
 
         // Band definitions: name, edges, default freq, default mode
         this.bands = [
+            { name: 'MW',   low: 530000,   high: 1710000,  freq: 1030000,  mode: 'am'  },
             { name: '160m', low: 1800000,  high: 2000000,  freq: 1840000,  mode: 'lsb' },
             { name: '80m',  low: 3500000,  high: 4000000,  freq: 3573000,  mode: 'lsb' },
             { name: '60m',  low: 5330000,  high: 5410000,  freq: 5357000,  mode: 'usb' },
+            { name: 'WWV',  low: 4990000,  high: 5010000,  freq: 5000000,  mode: 'am'  },
             { name: '40m',  low: 7000000,  high: 7300000,  freq: 7074000,  mode: 'lsb' },
             { name: '30m',  low: 10100000, high: 10150000, freq: 10136000, mode: 'usb' },
+            { name: 'WWV10',low: 9990000,  high: 10010000, freq: 10000000, mode: 'am'  },
             { name: '20m',  low: 14000000, high: 14350000, freq: 14074000, mode: 'usb' },
             { name: '17m',  low: 18068000, high: 18168000, freq: 18100000, mode: 'usb' },
+            { name: 'WWV15',low: 14990000, high: 15010000, freq: 15000000, mode: 'am'  },
             { name: '15m',  low: 21000000, high: 21450000, freq: 21074000, mode: 'usb' },
             { name: '12m',  low: 24890000, high: 24990000, freq: 24915000, mode: 'usb' },
             { name: '10m',  low: 28000000, high: 29700000, freq: 28074000, mode: 'usb' },
@@ -66,9 +70,19 @@ class VFO {
     /** Register callback: fn(mode) */
     onModeChange(fn) { this._onModeChange = fn; }
 
-    /** Set frequency externally (e.g., from waterfall click) */
+    /** Set frequency externally (e.g., from waterfall click) — snaps to step */
     setFrequency(hz) {
         this._setFrequency(hz);
+    }
+
+    /** Set exact frequency without step snapping (for direct entry, band recall) */
+    setFrequencyExact(hz) {
+        hz = this._clamp(hz);
+        if (hz === this.frequency) return;
+        this.frequency = hz;
+        this._saveBandMemory();
+        this._updateDisplay();
+        this._emitFrequency();
     }
 
     /** Get current band object (or null if out-of-band) */
@@ -232,15 +246,15 @@ class VFO {
             }
         });
 
-        // Direct frequency entry
+        // Direct frequency entry — exact, no step snap
         document.getElementById('vfo-direct-go').addEventListener('click', () => {
             const hz = parseInt(document.getElementById('vfo-direct-input').value);
-            if (!isNaN(hz)) this._setFrequency(hz);
+            if (!isNaN(hz)) this.setFrequencyExact(hz);
         });
         document.getElementById('vfo-direct-input').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 const hz = parseInt(e.target.value);
-                if (!isNaN(hz)) this._setFrequency(hz);
+                if (!isNaN(hz)) this.setFrequencyExact(hz);
             }
         });
 
@@ -284,7 +298,7 @@ class VFO {
     }
 
     _emitFrequency() {
-        console.log('[VFO] emit set_frequency', this.frequency);
+        console.log(`[VFO] set_frequency → ${this.frequency} Hz (${(this.frequency/1e6).toFixed(6)} MHz)`);
         this.socket.emit('set_frequency', { frequency: this.frequency });
         if (this._onFreqChange) this._onFreqChange(this.frequency);
     }
@@ -318,7 +332,8 @@ class VFO {
         const mem = this.bandMemory[bandName];
         if (!mem) return;
 
-        this.frequency = mem.freq;
+        // Use exact frequency — don't snap to current step size
+        this.frequency = this._clamp(mem.freq);
         this._updateDisplay();
         this._emitFrequency();
 

@@ -247,8 +247,12 @@ class WaterfallDisplay {
         if (ab.byteLength < 24) return;
 
         const frameNum = view.getUint32(4, true);
-        this.centerFreq = view.getUint32(8, true);
-        this.bandwidth = view.getUint32(12, true);
+        const newCenter = view.getUint32(8, true);
+        const newBw = view.getUint32(12, true);
+        // Redraw axis if center or bandwidth changed (e.g., user retuned)
+        const axisChanged = (newCenter !== this.centerFreq || newBw !== this.bandwidth);
+        this.centerFreq = newCenter;
+        this.bandwidth = newBw;
         this.fftSize = view.getUint16(16, true);
         const flags = view.getUint16(18, true);
         const hasPeak = flags & 0x01;
@@ -267,6 +271,15 @@ class WaterfallDisplay {
         }
 
         this.frameCount = frameNum;
+        if (axisChanged) {
+            this._drawAxis();
+            // Clear waterfall buffer — old content was at a different frequency
+            // and would mislead the eye if left behind
+            if (this.wfBufferCtx && this.wfBuffer) {
+                this.wfBufferCtx.fillStyle = '#000';
+                this.wfBufferCtx.fillRect(0, 0, this.wfBuffer.width, this.wfBuffer.height);
+            }
+        }
         this._drawSpectrum();
         this._drawWaterfallLine();
     }

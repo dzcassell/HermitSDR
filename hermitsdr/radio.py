@@ -100,7 +100,8 @@ class RadioState:
     """Current radio configuration."""
     sample_rate: SampleRate = SampleRate.SR_192K
     frequency_hz: int = 7_074_000  # 40m FT8
-    lna_gain_db: int = 20
+    lna_gain_db: int = 6   # Conservative default; raise if signals weak,
+                           # lower if ADC overload (which causes IMD/ringing)
     num_receivers: int = 1
     duplex: bool = False
     connected: bool = False
@@ -233,12 +234,16 @@ class RadioConnection:
         freq_hz = int(freq_hz)
         old = self.state.frequency_hz
         self.state.frequency_hz = freq_hz
+        cc = cc_set_frequency(1, freq_hz)
+        encoded = cc.encode()
         # Insert at FRONT of queue so frequency change happens immediately,
         # not behind whatever's already queued
-        self._cc_queue.appendleft(cc_set_frequency(1, freq_hz))
-        logger.info(f"NCO change queued (front): {old} → {freq_hz} Hz "
-                    f"[ADDR=0x02 DATA=0x{freq_hz & 0xFFFFFFFF:08x}] "
-                    f"queue depth={len(self._cc_queue)}")
+        self._cc_queue.appendleft(cc)
+        logger.info(
+            f"NCO change queued (front): {old} → {freq_hz} Hz "
+            f"[ADDR=0x{cc.addr:02x} DATA=0x{cc.data:08x}] "
+            f"C0..C4=0x{encoded.hex()} queue depth={len(self._cc_queue)}"
+        )
 
     def set_lna_gain(self, gain_db: int):
         """Queue an LNA gain change."""

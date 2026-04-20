@@ -56,6 +56,11 @@ class TestCC:
         e = cc_set_lna_gain(20).encode()
         d = (e[1]<<24)|(e[2]<<16)|(e[3]<<8)|e[4]
         assert d & 0x40 and (d & 0x3F) == 32
+
+    def test_lna_gain_addr_is_0x0a(self):
+        """HL2 LNA gain uses ADDR 0x0A in direct mode (bit 6 set)."""
+        cmd = cc_set_lna_gain(20)
+        assert cmd.addr == 0x0A, f"Expected ADDR 0x0A, got 0x{cmd.addr:02x}"
     def test_sample_rate_192k(self):
         e = cc_set_sample_rate(SampleRate.SR_192K).encode()
         d = (e[1]<<24)|(e[2]<<16)|(e[3]<<8)|e[4]

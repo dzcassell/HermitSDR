@@ -303,9 +303,14 @@ def cc_set_frequency(rx_index: int, freq_hz: int) -> CCCommand:
 def cc_set_lna_gain(gain_db: int) -> CCCommand:
     """ADDR 0x0A: Set LNA gain in direct mode (-12 to +48 dB).
 
+    Per HL2 wiki: when bit 6 at address 0x0A is set, LNA[5:0] is passed
+    directly to the AD9866 for the full -12dB (0) to +48dB (60) range.
+
     DATA layout:
         [6]   = 1 (direct gain mode)
         [5:0] = gain value (0=-12dB, 60=+48dB)
+
+    Reference: https://github.com/softerhardware/Hermes-Lite2/wiki/Protocol
     """
     gain_val = max(0, min(60, gain_db + 12))
     data = (1 << 6) | (gain_val & 0x3F)

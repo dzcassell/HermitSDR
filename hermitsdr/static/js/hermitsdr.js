@@ -195,6 +195,8 @@ gainSlider.addEventListener('input', () => {
 });
 
 // Telemetry
+let _ovlCount = 0;
+let _ovlAdvised = false;
 socket.on('telemetry', (t) => {
     document.getElementById('telem-fw').textContent = t.firmware_version || '--';
     document.getElementById('telem-temp').textContent = t.temperature_c ? t.temperature_c + ' °C' : '--';
@@ -204,6 +206,25 @@ socket.on('telemetry', (t) => {
     const adcEl = document.getElementById('telem-adc');
     adcEl.textContent = t.adc_overload ? 'OVL' : 'OK';
     adcEl.style.color = t.adc_overload ? 'var(--red)' : 'var(--green)';
+
+    // Coach the user when overload is sustained: drop LNA gain
+    if (t.adc_overload) {
+        _ovlCount++;
+        if (_ovlCount === 8 && !_ovlAdvised) {
+            _ovlAdvised = true;
+            const gain = parseInt(document.getElementById('gain-slider').value);
+            logMsg(`⚠ ADC OVERLOAD sustained — front-end clipping. ` +
+                   `Try lowering LNA Gain (currently ${gain} dB) by 6-12 dB. ` +
+                   `Symptoms: ringing/buzz in audio, garbled spectrum.`, 'error');
+        }
+    } else {
+        _ovlCount = 0;
+        if (_ovlAdvised) {
+            _ovlAdvised = false;
+            logMsg('ADC overload cleared', 'success');
+        }
+    }
+
     document.getElementById('telem-rxpkt').textContent = (t.rx_packets||0).toLocaleString();
     const seqEl = document.getElementById('telem-seqerr');
     seqEl.textContent = t.rx_sequence_errors || '0';

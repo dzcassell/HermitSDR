@@ -106,8 +106,10 @@
 
                     <!-- LNA Gain -->
                     <div class="control-group">
-                        <label>LNA Gain: <span id="gain-value">20</span> dB</label>
-                        <input type="range" id="gain-slider" min="-12" max="48" value="20" class="slider">
+                        <label>LNA Gain: <span id="gain-value">6</span> dB
+                            <span style="color:var(--text-dim);font-size:0.75em">(lower if OVL, higher if weak)</span>
+                        </label>
+                        <input type="range" id="gain-slider" min="-12" max="48" value="6" class="slider">
                     </div>
 
                     <!-- Sample Rate (read-only for now) -->

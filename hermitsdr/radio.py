@@ -230,32 +230,73 @@ class RadioConnection:
         self.state.connected = False
 
     def set_frequency(self, freq_hz: int):
-        """Queue a frequency change."""
+        """Queue a frequency change.
+
+        Sends via TWO paths for maximum compatibility:
+        1. Embedded in TX C&C stream (port 1024) — standard openHPSDR way
+        2. Direct register write to port 1025 — HL2-specific, gateware ≥73
+
+        Some HL2 deployments respond only to (2). Both are cheap so we send
+        both. Reference: https://github.com/softerhardware/Hermes-Lite2/blob/master/gateware/rtl/dsopenhpsdr1.v
+        """
         freq_hz = int(freq_hz)
         old = self.state.frequency_hz
         self.state.frequency_hz = freq_hz
+
+        # Path 1: embedded C&C in TX stream (port 1024)
         cc = cc_set_frequency(1, freq_hz)
         encoded = cc.encode()
-        # Insert at FRONT of queue so frequency change happens immediately,
-        # not behind whatever's already queued
         self._cc_queue.appendleft(cc)
+
+        # Path 2: direct port-1025 register write (HL2-specific bypass)
+        # Format: bytes([0xef, 0xfe, 0x05, 0x7f, addr<<1]) + 4-byte data + 51 zeros
+        try:
+            addr = 0x02  # RX1 NCO
+            data = struct.pack('!L', freq_hz & 0xFFFFFFFF)
+            pkt = bytes([0xef, 0xfe, 0x05, 0x7f, addr << 1]) + data + bytes([0x00] * 51)
+            self._sock.sendto(pkt, (self.device.source_ip, 1025))
+            port_1025_ok = True
+        except Exception as e:
+            port_1025_ok = False
+            logger.debug(f"Port 1025 send failed (gateware may not support): {e}")
+
         logger.info(
-            f"NCO change queued (front): {old} → {freq_hz} Hz "
+            f"NCO change: {old} → {freq_hz} Hz "
             f"[ADDR=0x{cc.addr:02x} DATA=0x{cc.data:08x}] "
-            f"C0..C4=0x{encoded.hex()} queue depth={len(self._cc_queue)}"
+            f"C0..C4=0x{encoded.hex()} "
+            f"path=p1024+{'p1025' if port_1025_ok else 'p1024-only'} "
+            f"qdepth={len(self._cc_queue)}"
         )
 
     def set_lna_gain(self, gain_db: int):
-        """Queue an LNA gain change."""
+        """Queue an LNA gain change.
+
+        Same dual-path strategy as set_frequency: send via embedded TX C&C
+        AND via port 1025 direct register write for maximum compatibility.
+        """
         old = self.state.lna_gain_db
         self.state.lna_gain_db = gain_db
         cc = cc_set_lna_gain(gain_db)
         encoded = cc.encode()
+
+        # Path 1: embedded C&C in TX stream (port 1024)
         self._cc_queue.appendleft(cc)
+
+        # Path 2: direct port-1025 register write (HL2-specific bypass)
+        try:
+            data = struct.pack('!L', cc.data & 0xFFFFFFFF)
+            pkt = bytes([0xef, 0xfe, 0x05, 0x7f, cc.addr << 1]) + data + bytes([0x00] * 51)
+            self._sock.sendto(pkt, (self.device.source_ip, 1025))
+            port_1025_ok = True
+        except Exception as e:
+            port_1025_ok = False
+            logger.debug(f"Port 1025 LNA gain send failed: {e}")
+
         logger.info(
-            f"LNA gain queued: {old} → {gain_db} dB "
+            f"LNA gain: {old} → {gain_db} dB "
             f"[ADDR=0x{cc.addr:02x} DATA=0x{cc.data:08x}] "
-            f"C0..C4=0x{encoded.hex()}"
+            f"C0..C4=0x{encoded.hex()} "
+            f"path=p1024+{'p1025' if port_1025_ok else 'p1024-only'}"
         )
 
     def set_sample_rate(self, rate_hz: int):

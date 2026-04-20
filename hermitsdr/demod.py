@@ -326,10 +326,16 @@ class Demodulator:
         else:
             audio = np.real(filtered)
 
-        # ── Step 5: Squelch ──
+        # ── Step 5: Normalize from 24-bit ADC scale to [-1, 1] ──
+        # Until this point audio is in raw ADC units (±8388608). Both
+        # squelch level computation and the AGC operate cleanly when audio
+        # is in the standard normalized range.
+        audio = audio / 8388608.0
+
+        # ── Step 6: Squelch ──
         rms = np.sqrt(np.mean(audio ** 2))
-        if rms > 0:
-            level_db = 20 * np.log10(rms / 8388608.0)  # relative to 24-bit FS
+        if rms > 1e-12:
+            level_db = 20 * np.log10(rms)  # already normalized, so dBFS
         else:
             level_db = -160.0
         self._audio_level = level_db
@@ -337,13 +343,13 @@ class Demodulator:
         if level_db < self.config.squelch_db:
             return np.zeros(CHUNK_SAMPLES, dtype=np.float32)
 
-        # ── Step 6: AGC ──
+        # ── Step 7: AGC ──
         audio = self._apply_agc(audio)
 
-        # ── Step 7: Volume ──
+        # ── Step 8: Volume ──
         audio = audio * self.config.volume
 
-        # ── Step 8: Clip to [-1, 1] ──
+        # ── Step 9: Clip to [-1, 1] ──
         audio = np.clip(audio, -1.0, 1.0)
 
         return audio.astype(np.float32)

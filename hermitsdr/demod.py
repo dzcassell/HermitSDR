@@ -48,12 +48,19 @@ class DemodMode(Enum):
 
 
 # Mode-specific parameters: (shift_hz, filter_bandwidth_hz)
-# shift_hz moves the desired passband center to 0 Hz before LPF
+# Demod chain: IQ → mix by exp(-j*2pi*shift*t) → LPF → real(audio)
+#
+# For SSB the carrier is at 0 Hz (suppressed). We shift the desired sideband
+# so it spans (-bw/2, +bw/2) around 0, then LPF, then real() projects both
+# halves of the spectrum onto the same audio band, recovering voice.
+#   USB: voice at +300..+2700 Hz → shift -1500 → -1200..+1200 → LPF 1500
+#   LSB: voice at -2700..-300 Hz → shift +1500 → -1200..+1200 → LPF 1500
+# Filter cutoff matches shift to capture the full ±1.2 kHz audio band.
 MODE_PARAMS = {
-    DemodMode.USB: (-1500, 1200),   # passband 300–2700 Hz
-    DemodMode.LSB: (1500, 1200),    # passband -2700 to -300 Hz
-    DemodMode.CW:  (-700, 250),     # passband 450–950 Hz
-    DemodMode.AM:  (0, 5000),       # passband ±5000 Hz
+    DemodMode.USB: (-1500, 1500),   # USB voice → audio centered at 0
+    DemodMode.LSB: (1500, 1500),    # LSB voice → audio centered at 0
+    DemodMode.CW:  (-700, 400),     # CW tone at 700 Hz, ±400 Hz BW
+    DemodMode.AM:  (0, 5000),       # AM: ±5000 Hz around carrier
 }
 
 

@@ -247,8 +247,16 @@ class RadioConnection:
 
     def set_lna_gain(self, gain_db: int):
         """Queue an LNA gain change."""
+        old = self.state.lna_gain_db
         self.state.lna_gain_db = gain_db
-        self._cc_queue.append(cc_set_lna_gain(gain_db))
+        cc = cc_set_lna_gain(gain_db)
+        encoded = cc.encode()
+        self._cc_queue.appendleft(cc)
+        logger.info(
+            f"LNA gain queued: {old} → {gain_db} dB "
+            f"[ADDR=0x{cc.addr:02x} DATA=0x{cc.data:08x}] "
+            f"C0..C4=0x{encoded.hex()}"
+        )
 
     def set_sample_rate(self, rate_hz: int):
         """Queue a sample rate change. Requires restart to take effect."""

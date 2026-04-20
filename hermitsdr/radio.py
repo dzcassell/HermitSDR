@@ -233,9 +233,12 @@ class RadioConnection:
         freq_hz = int(freq_hz)
         old = self.state.frequency_hz
         self.state.frequency_hz = freq_hz
-        self._cc_queue.append(cc_set_frequency(1, freq_hz))
-        logger.info(f"Queued NCO change: {old} → {freq_hz} Hz "
-                    f"(ADDR=0x02, DATA=0x{freq_hz & 0xFFFFFFFF:08x})")
+        # Insert at FRONT of queue so frequency change happens immediately,
+        # not behind whatever's already queued
+        self._cc_queue.appendleft(cc_set_frequency(1, freq_hz))
+        logger.info(f"NCO change queued (front): {old} → {freq_hz} Hz "
+                    f"[ADDR=0x02 DATA=0x{freq_hz & 0xFFFFFFFF:08x}] "
+                    f"queue depth={len(self._cc_queue)}")
 
     def set_lna_gain(self, gain_db: int):
         """Queue an LNA gain change."""

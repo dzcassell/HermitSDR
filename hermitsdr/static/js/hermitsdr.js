@@ -99,7 +99,7 @@ async function connectRadio(mac) {
             logMsg(`Connected to ${data.device.board_name} at ${data.device.source_ip}`, 'success');
             if (data.dsp) logMsg(`DSP: GPU=${data.dsp.gpu_available ? 'YES' : 'NO'} FFT=${data.dsp.config.fft_size}`, 'info');
             panelRadio.classList.remove('hidden');
-            // Initialize VFO
+            // Initialize VFO (its container is in panel-radio which is now visible)
             if (!vfo && window.VFO) {
                 vfo = new VFO('vfo-container', socket);
                 vfo.onFrequencyChange((hz) => {
@@ -111,22 +111,8 @@ async function connectRadio(mac) {
                     logMsg(`Mode → ${mode.toUpperCase()}`);
                 });
             }
-            // Initialize waterfall
-            if (!waterfall && window.WaterfallDisplay) {
-                waterfall = new WaterfallDisplay('waterfall-container', socket);
-                // Route click-to-tune through VFO for step-snapping
-                if (vfo) {
-                    waterfall.onClickTune = (hz) => vfo.setFrequency(hz);
-                    // Bind scroll-wheel tuning on waterfall canvases
-                    // (slight delay to ensure canvases exist after WaterfallDisplay._build)
-                    setTimeout(() => {
-                        const specEl = document.getElementById('wf-spectrum');
-                        const wfEl = document.getElementById('wf-waterfall');
-                        if (specEl) vfo.bindScrollTarget(specEl);
-                        if (wfEl) vfo.bindScrollTarget(wfEl);
-                    }, 100);
-                }
-            }
+            // Note: waterfall init is deferred to btn-start because panel-waterfall
+            // is hidden at this point — building it now gives canvases zero width
         } else logMsg(`Connect failed: ${data.error}`, 'error');
     } catch(e) { logMsg(`Connect error: ${e.message}`, 'error'); }
 }
@@ -154,8 +140,32 @@ document.getElementById('btn-start').addEventListener('click', async () => {
         logMsg('IQ stream active', 'success');
         document.getElementById('btn-start').classList.add('hidden');
         document.getElementById('btn-stop').classList.remove('hidden');
-        panelTelem.classList.remove('hidden'); panelWf.classList.remove('hidden'); panelIQ.classList.remove('hidden');
+        // Unhide panels FIRST so canvases get real dimensions when waterfall builds
+        panelTelem.classList.remove('hidden');
+        panelWf.classList.remove('hidden');
+        panelIQ.classList.remove('hidden');
         document.getElementById('panel-audio').classList.remove('hidden');
+        // Now initialize / re-resize the waterfall now that panel is visible
+        // This must happen AFTER the panel is unhidden so clientWidth > 0
+        if (window.WaterfallDisplay) {
+            // Wait one frame so layout settles
+            requestAnimationFrame(() => {
+                if (!waterfall) {
+                    waterfall = new WaterfallDisplay('waterfall-container', socket);
+                    if (vfo) {
+                        waterfall.onClickTune = (hz) => vfo.setFrequency(hz);
+                        // Bind scroll-wheel tuning on waterfall canvases
+                        const specEl = document.getElementById('wf-spectrum');
+                        const wfEl = document.getElementById('wf-waterfall');
+                        if (specEl) vfo.bindScrollTarget(specEl);
+                        if (wfEl) vfo.bindScrollTarget(wfEl);
+                    }
+                } else {
+                    // Already exists — force a resize so canvases get correct dims
+                    waterfall._resize();
+                }
+            });
+        }
     } else logMsg(`Start failed: ${data.error}`, 'error');
 });
 

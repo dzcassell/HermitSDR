@@ -120,9 +120,6 @@ class RadioConnection:
         self._tx_thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
 
-        # IQ sample buffer — consumers (FFT pipeline) read from here
-        self._iq_buffer: deque = deque(maxlen=65536)
-
         # Pending C&C commands to interleave into TX frames
         self._cc_queue: deque = deque(maxlen=256)
 
@@ -252,21 +249,6 @@ class RadioConnection:
             self.state.sample_rate, self.state.num_receivers, self.state.duplex
         ))
 
-    def get_iq_samples(self, count: int) -> Optional[tuple]:
-        """Pull IQ samples from the buffer.
-
-        Returns:
-            (i_array, q_array) of length up to `count`, or None if empty
-        """
-        i_out = []
-        q_out = []
-        with self._lock:
-            while self._iq_buffer and len(i_out) < count:
-                i_val, q_val = self._iq_buffer.popleft()
-                i_out.append(i_val)
-                q_out.append(q_val)
-        return (i_out, q_out) if i_out else None
-
     # ──── Internal loops ────
 
     def _rx_loop(self):
@@ -292,8 +274,7 @@ class RadioConnection:
                         f"RX: {diag_packets} pkts in 5s "
                         f"({diag_packets/5:.0f}/s), "
                         f"total={self.telemetry.rx_packets}, "
-                        f"seq_err={self.telemetry.rx_sequence_errors}, "
-                        f"buf={len(self._iq_buffer)}"
+                        f"seq_err={self.telemetry.rx_sequence_errors}"
                     )
                     diag_packets = 0
                     diag_time = now

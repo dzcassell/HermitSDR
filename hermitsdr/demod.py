@@ -129,10 +129,12 @@ class Demodulator:
         """Push IQ samples into the demodulator buffer.
 
         Accepts lists or numpy arrays of integer I/Q samples.
+        Thread-safe: takes the same lock as _process_loop.
         """
         iq = np.asarray(i_samples, dtype=np.float64) + \
              1j * np.asarray(q_samples, dtype=np.float64)
-        self._iq_buffer.extend(iq)
+        with self._lock:
+            self._iq_buffer.extend(iq)
 
     def start(self):
         """Start the demodulator processing thread."""
@@ -297,9 +299,10 @@ class Demodulator:
             t = np.arange(n) / AUDIO_RATE + self._mixer_phase
             mixer = np.exp(2j * np.pi * shift_hz * t)
             decimated = decimated * mixer
-            # Update phase accumulator (avoid float drift)
+            # Advance phase accumulator (in seconds), wrap modulo one cycle
+            # period to prevent float-precision drift over long runs
             self._mixer_phase += n / AUDIO_RATE
-            self._mixer_phase %= 1.0 / abs(shift_hz) if shift_hz != 0 else 1.0
+            self._mixer_phase %= 1.0 / abs(shift_hz)
 
         # ── Step 3: Bandpass FIR filter ──
         filtered, self._filter_state = lfilter(

@@ -179,10 +179,15 @@ class DSPPipeline:
 
         Converts integer I/Q sample lists to complex and extends the
         buffer. Uses batch conversion (not per-sample) for throughput.
+
+        Thread safety: takes the same lock as _process_loop so the
+        compound pop+extendleft sequence isn't interleaved with appends
+        from the RX callback thread.
         """
         # Batch convert to complex — much faster than per-sample loop
         iq = np.array(i_samples, dtype=np.float64) + 1j * np.array(q_samples, dtype=np.float64)
-        self._iq_buffer.extend(iq)
+        with self._lock:
+            self._iq_buffer.extend(iq)
 
     def start(self):
         """Start the DSP processing thread."""

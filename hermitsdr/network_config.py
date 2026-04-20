@@ -125,11 +125,13 @@ def _build_idle_packet(seq: int) -> bytes:
 
 
 def _drain_socket(sock, count=20):
-    """Drain up to `count` packets from socket."""
+    """Drain up to `count` packets from socket. Stops on timeout or empty."""
     for _ in range(count):
         try:
             sock.recvfrom(2048)
-        except socket.timeout:
+        except (socket.timeout, BlockingIOError):
+            break
+        except OSError:
             break
 
 

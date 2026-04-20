@@ -88,6 +88,7 @@ const panelWf = document.getElementById('panel-waterfall');
 let waterfall = null;
 let audioPlayer = null;
 let vfo = null;
+let audioMuted = false;
 
 async function connectRadio(mac) {
     logMsg(`Connecting to ${mac}...`);
@@ -138,6 +139,9 @@ document.getElementById('btn-disconnect').addEventListener('click', async () => 
     document.getElementById('panel-audio').classList.add('hidden');
     document.getElementById('btn-stop').classList.add('hidden');
     document.getElementById('btn-start').classList.remove('hidden');
+    // Reset audio enable button so user can re-enable on reconnect
+    document.getElementById('btn-audio-start').classList.remove('hidden');
+    document.getElementById('btn-audio-mute').classList.add('hidden');
     logMsg('Disconnected', 'warn');
 });
 
@@ -162,6 +166,10 @@ document.getElementById('btn-stop').addEventListener('click', async () => {
     document.getElementById('btn-stop').classList.add('hidden');
     document.getElementById('btn-start').classList.remove('hidden');
     document.getElementById('panel-audio').classList.add('hidden');
+    // Reset audio enable button so user can re-enable when stream restarts
+    document.getElementById('btn-audio-start').classList.remove('hidden');
+    document.getElementById('btn-audio-mute').classList.add('hidden');
+    audioMuted = false;
 });
 
 // LNA Gain
@@ -314,7 +322,6 @@ document.getElementById('btn-audio-start').addEventListener('click', () => {
 });
 
 // Mute toggle
-let audioMuted = false;
 document.getElementById('btn-audio-mute').addEventListener('click', () => {
     audioMuted = !audioMuted;
     if (audioPlayer) audioPlayer.setMute(audioMuted);

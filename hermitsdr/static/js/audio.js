@@ -150,8 +150,11 @@ class AudioPlayer {
             });
             return;
         } else if (buffer.buffer instanceof ArrayBuffer) {
-            // TypedArray or DataView
-            float32 = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4);
+            // TypedArray or DataView — third arg to Float32Array is element
+            // count (not bytes), and we want to view exactly the original
+            // bytes regardless of what view type was passed in.
+            const numFloats = buffer.byteLength / 4;
+            float32 = new Float32Array(buffer.buffer, buffer.byteOffset, numFloats);
         } else {
             console.warn('[AudioPlayer] unknown buffer type:', typeof buffer);
             return;

@@ -21,7 +21,7 @@ from .dsp import DSPPipeline, DSPConfig, ColorPalette, generate_color_palette
 from .demod import Demodulator, DemodConfig, DemodMode, AUDIO_RATE
 from .network_config import set_hl2_ip, HL2NetworkConfig, check_needs_setup
 
-__version__ = '0.4.1'
+__version__ = '0.4.2'
 
 # ──────────────────────────────────────────────
 # App setup
@@ -486,7 +486,11 @@ def ws_set_squelch(data):
 
 def start_app(host='0.0.0.0', port=5000, debug=False):
     """Start the HermitSDR application."""
-    logger.info(f"HermitSDR v{__version__} starting on {host}:{port}")
+    logger.info("=" * 60)
+    logger.info(f"  HermitSDR v{__version__}")
+    logger.info(f"  Listening: http://{host}:{port}")
+    logger.info(f"  HL2 discovery: UDP :1024 (broadcast + directed)")
+    logger.info("=" * 60)
     discovery.start_monitor(interval=10.0)
     try:
         socketio.run(app, host=host, port=port, debug=debug,

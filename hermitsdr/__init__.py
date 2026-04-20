@@ -1,2 +1,2 @@
 """HermitSDR - GPU-accelerated web client for Hermes SDR compatible radios."""
-__version__ = '0.4.1'
+__version__ = '0.4.2'
